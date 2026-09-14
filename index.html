@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#1B2A41">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>레버리지 리밸런싱</title>
+<title>매매 매뉴얼</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
 :root{--ink:#1B2A41;--paper:#F3F5F8;--card:#fff;--line:#D9DFE8;--hair:#EEF1F5;--dim:#5B6B82;--down:#2F6FD6;--up:#D93A3A;--tint:#E9EDF3;--warn:#FFF1C9}
@@ -50,20 +50,23 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .sumrow .txt.up{color:var(--up);font-weight:700}
 .sumrow .txt.down{color:var(--down);font-weight:700}
 .dot{width:8px;height:8px;border-radius:50%;background:#C9D2DE;flex:none}
-.dot.stake{background:var(--down)}.dot.vhold{background:var(--up)}
+.dot.stake,.dot.wait{background:var(--down)}.dot.vhold{background:var(--up)}
 .tabs{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tab{font:inherit;font-size:14px;font-weight:700;padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
-.tab.on .dot:not(.stake):not(.vhold){background:#8A97AD}
+.tab.on .dot:not(.stake):not(.vhold):not(.wait){background:#8A97AD}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:16px;overflow:hidden}
 .head{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--ink);color:#fff;flex-wrap:wrap}
 .sym{font-size:18px;font-weight:800;letter-spacing:.02em}
 .desc{font-size:12px;color:#B9C4D6;flex:1;min-width:100px}
 .badge{font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid #fff;color:#fff}
-.badge.stake{background:var(--down);border-color:var(--down)}
+.badge.stake,.badge.wait{background:var(--down);border-color:var(--down)}
 .badge.vhold{background:var(--up);border-color:var(--up)}
 .body{padding:12px 14px 14px}
+.strat{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.strat select{width:auto;flex:1;min-width:180px;font-size:14px;padding:7px 9px}
+.rule{font-size:12px;color:var(--dim);line-height:1.5;margin:0 0 10px}
 .hold{font-size:13px;color:var(--dim);line-height:1.6;margin-bottom:10px}
 .hold b{color:var(--ink)}
 .status{padding:10px 12px;border-left:4px solid var(--ink);background:var(--paper);border-radius:0 8px 8px 0;font-size:14px;line-height:1.55;margin-bottom:12px}
@@ -84,7 +87,6 @@ td{text-align:right;padding:6px 6px;border-bottom:1px solid var(--hair);white-sp
 tr.cur td{font-weight:700}
 tr.cur td:first-child{box-shadow:inset 4px 0 0 var(--ink)}
 td.done{color:var(--down);font-weight:600}
-td.off,th.off{color:#A7B1C2;font-weight:400}
 .note{font-size:12px;color:var(--dim);margin:6px 0 0;line-height:1.5}
 .log{margin-top:12px;font-size:13px;color:var(--dim);border-top:1px solid var(--hair);padding-top:8px}
 .log div{display:flex;gap:8px;flex-wrap:wrap;padding:3px 0}
@@ -100,9 +102,12 @@ textarea{font-size:12px;min-height:90px;font-family:ui-monospace,Menlo,monospace
 .chk{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink)}
 .chk input{width:auto}
 .settings summary{font-size:15px}
-.steps td input{font-size:14px;padding:6px 6px;text-align:right}
-.steps td,.steps th{padding:4px 3px}
-.steps td:first-child{font-weight:700}
+.cfg{border-top:1px solid var(--hair);padding:10px 0 4px;margin-top:8px}
+.cfg .name{font-weight:800;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.cfg .toggles{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.cfg .nums{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.cfg .nums input{font-size:14px;padding:6px 6px;text-align:right}
+.cfg .nums label{font-size:11px}
 .rules{font-size:13px;color:var(--dim);line-height:1.6;padding:0 4px}
 .rules summary{font-size:14px;color:var(--ink);margin-bottom:4px}
 .rules ul{margin:0;padding-left:18px}
@@ -113,7 +118,7 @@ textarea{font-size:12px;min-height:90px;font-family:ui-monospace,Menlo,monospace
 <body>
 <div class="wrap">
   <div class="top">
-    <h1>레버리지 리밸런싱</h1>
+    <h1>매매 매뉴얼</h1>
     <div class="row">
       <div class="seg" id="regime">
         <button type="button" data-r="hike">금리인상기</button>
@@ -138,25 +143,23 @@ textarea{font-size:12px;min-height:90px;font-family:ui-monospace,Menlo,monospace
       <div><label for="ndx">나스닥 대용 심볼</label><input id="ndx" placeholder="ONEQ" autocapitalize="characters"></div>
       <div><label for="threshold">위기 기준 등락률 %</label><input id="threshold" type="number" step="0.1"></div>
     </div>
-    <p class="note" style="margin-top:12px">종목별 간격 (%). 말뚝박기는 위 토글의 금리 국면에 따라 두 값 중 하나를 씁니다.</p>
-    <table class="steps" id="stepsTable"></table>
+    <p class="note" style="margin-top:12px">종목별 규칙 부품. 전략 드롭다운으로 고르면 자동으로 채워지고, 여기서 직접 바꿀 수도 있습니다.</p>
+    <div id="cfgList"></div>
     <div class="row" style="margin-top:10px;justify-content:space-between">
       <button type="button" class="btn" id="saveSettings">설정 저장</button>
       <button type="button" class="link" id="wipe">모든 데이터 지우기</button>
     </div>
     <details><summary>종목 추가</summary>
       <div class="grid">
-        <div><label for="add-sym">심볼</label><input id="add-sym" placeholder="SOXL" autocapitalize="characters"></div>
-        <div><label for="add-desc">설명</label><input id="add-desc" placeholder="반도체 3배"></div>
-        <div><label for="add-r">리밸런싱 간격 %</label><input id="add-r" type="number" step="0.5" value="5"></div>
-        <div class="chk" style="align-self:end"><input id="add-crisis" type="checkbox" checked><label for="add-crisis" style="margin:0">나스닥 −3% 위기 모드 적용</label></div>
-        <div><label for="add-z">말뚝박기 제로금리 %</label><input id="add-z" type="number" step="0.5" value="5"></div>
-        <div><label for="add-h">말뚝박기 금리인상기 %</label><input id="add-h" type="number" step="0.5" value="7.5"></div>
+        <div><label for="add-sym">종목 이름</label><input id="add-sym" placeholder="QLD" autocapitalize="characters"></div>
+        <div><label for="add-feed">시세 심볼 (다르면)</label><input id="add-feed" placeholder="예: BTC/USD, 비우면 이름과 같음"></div>
+        <div style="grid-column:1/-1"><label for="add-desc">설명</label><input id="add-desc" placeholder="나스닥100 2배"></div>
+        <div style="grid-column:1/-1"><label for="add-preset">시작 전략</label><select id="add-preset"></select></div>
       </div>
       <button type="button" class="btn sec sm" id="addTicker" style="margin-top:10px">추가</button>
     </details>
     <details><summary>백업·복원</summary>
-      <p class="note">아래 내용을 복사해 메모 앱 등에 두면 다른 기기나 새 브라우저에서 붙여넣어 복원할 수 있습니다. 시세는 포함하지 않으며 복원 후 새로고침하면 됩니다.</p>
+      <p class="note">아래 내용을 복사해 메모 앱 등에 두면 다른 기기에서 붙여넣어 복원할 수 있습니다. API 키가 포함되니 남에게 보이지 않는 곳에만 보관하세요. 시세는 포함하지 않으며 복원 후 새로고침하면 됩니다.</p>
       <textarea id="backup" spellcheck="false"></textarea>
       <div class="row" style="margin-top:8px">
         <button type="button" class="btn sec sm" id="exportBtn">내보내기</button>
@@ -167,17 +170,17 @@ textarea{font-size:12px;min-height:90px;font-family:ui-monospace,Menlo,monospace
     <p class="note">키와 기록은 이 기기 브라우저에만 저장됩니다. 나스닥 종합지수는 무료 플랜에서 바로 받을 수 없어, 종합지수를 추종하는 ONEQ의 등락률로 −3%를 판단합니다. 무료 플랜은 분당 8크레딧이라 새로고침 후 1분간 잠깁니다.</p>
   </details>
 
-  <details class="rules"><summary>이 앱이 따르는 규칙</summary><div id="rules"></div></details>
+  <details class="rules"><summary>규칙 설명과 백테스트 근거</summary><div id="rules"></div></details>
 </div>
 
 <script>
-// ===== ENGINE START =====
-const ZONES = 10, UNIT = 10;
+// ===== 엔진 =====
+const ZONES = 10, UNIT = 10;  // 말뚝박기 표: 10구간 × 10%
 const r2 = (x) => Math.round(x * 100) / 100;
 const level = (ref, k, s) => r2(ref * (1 - k * s));
-function zoneOf(ref, price, s) {
+function zoneOf(ref, price, s, zones) {
   if (!ref || price == null || !(price < ref)) return 0;
-  return Math.min(ZONES, Math.floor((ref - price) / ref / s + 1e-9));
+  return Math.min(zones || ZONES, Math.floor((ref - price) / ref / s + 1e-9));
 }
 function addMonths(dateStr, months, days) {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -187,8 +190,8 @@ function addMonths(dateStr, months, days) {
   return new Date(Date.UTC(ty, tmm, Math.min(d, lastDay) + days)).toISOString().slice(0, 10);
 }
 const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
+const fmtPct = (n) => n == null || !Number.isFinite(n) ? "—" : (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(1) + "%";
 
-// 나스닥(대용 ETF) 일봉(오름차순) → 날짜별 시장 정보: -3% 발생, 대기 종료일, 연속 상승
 function buildMarket(bars, thresholdPct) {
   const byDate = {}, events = [];
   let streak = 0, waitUntil = null, waitMonths = 1;
@@ -199,134 +202,183 @@ function buildMarket(bars, thresholdPct) {
     streak = pct != null && pct > 0 ? streak + 1 : 0;
     if (event) {
       events.push(b.date);
-      // 최근 두 달의 발생일 중 한 달 창 안에 4회 이상이면 두 달+1일 대기
       const recent = events.filter((e) => e >= addMonths(b.date, -2, 0));
       const four = recent.some((st) => recent.filter((e) => e >= st && e <= addMonths(st, 1, 0)).length >= 4);
       waitMonths = four ? 2 : 1;
       waitUntil = addMonths(b.date, waitMonths, 1);
     }
     const lastEvent = events.length ? events[events.length - 1] : null;
-    byDate[b.date] = {
-      date: b.date, close: b.close, pct, event, streak, lastEvent, waitUntil, waitMonths,
-      crisis: !!lastEvent && b.date < waitUntil,
-      recentEvents: events.filter((e) => e >= addMonths(b.date, -2, 0)),
-    };
+    byDate[b.date] = { date: b.date, close: b.close, pct, event, streak, lastEvent, waitUntil, waitMonths, crisis: !!lastEvent && b.date < waitUntil, recentEvents: events.filter((e) => e >= addMonths(b.date, -2, 0)) };
   }
   return { byDate, last: bars.length ? byDate[bars[bars.length - 1].date] : null };
 }
-
 function describeMove(from, to) {
   if (to > from) return `주식 ${to - from}% 매수, 주식 ${to}%`;
   if (to < from) return `주식 ${from - to}% 매도, 주식 ${to}%`;
   return "그대로 유지";
 }
-
-// 하루치(종가·저가·시장정보)를 종목 상태에 적용
+// cfg: {crisis, stake, ma200, rebal, stepRebal, unit, rebuy, stepStake}; day: {date, close, low, mk, ma}
 function stepTicker(t, cfg, day) {
   const mk = day.mk || {};
   const n = Object.assign({}, t);
   const sR = cfg.stepRebal / 100, sS = cfg.stepStake / 100;
+  const unit = cfg.unit || 10, rebuy = cfg.rebuy || 2, ZR = Math.max(1, Math.round(100 / unit));
+  const zoneR = (ref, p) => zoneOf(ref, p, sR, ZR);
   const kMax0 = t.kMax || 0;
-  let signal = "", target = t.stock == null ? 100 : t.stock;
+  const cur = t.stock == null ? 100 : t.stock;
+  let signal = "", target = cur;
   const notes = [];
   const waitOver = mk.waitUntil ? day.date >= mk.waitUntil : false;
   const exitReason = !mk.event && (waitOver ? "대기 기간 종료" : (mk.streak || 0) >= 8 ? "8거래일 연속 상승" : null);
+  const hasMA = !!cfg.ma200 && Number.isFinite(day.ma);
+  const aboveMA = !hasMA || day.close > day.ma;
+  n.ma = Number.isFinite(day.ma) ? r2(day.ma) : null;
+  const exitTarget = () => aboveMA ? 100 : 0;
+  const exitNote = () => aboveMA ? ", 전량 매수" : ", 200일선 아래라 현금 유지";
 
-  if (t.mode === "stake") {
+  if (t.mode === "wait") {
+    if (exitReason) { n.mode = "rebal"; n.ref = day.close > (t.ref || 0) ? r2(day.close) : level(t.ref, zoneR(t.ref, day.close), sR); n.kMax = 0; n.vZone = null; target = exitTarget(); signal = exitReason + exitNote(); }
+    else { target = 0; if (mk.event) notes.push("새 −3%, 대기 재시작"); }
+  } else if (t.mode === "stake") {
     if (exitReason) {
       const k = zoneOf(t.ref, day.close, sS);
-      n.mode = "rebal"; n.ref = day.close > t.ref ? r2(day.close) : level(t.ref, k, sS); n.kMax = 0; n.vZone = null; target = 100;
-      signal = exitReason + ", 전량 매수";
+      n.mode = "rebal"; n.ref = day.close > t.ref ? r2(day.close) : level(t.ref, k, sS); n.kMax = 0; n.vZone = null; target = exitTarget(); signal = exitReason + exitNote();
     } else {
       const kLow = zoneOf(t.ref, day.low, sS);
       let fills = 0;
       if (kLow > kMax0) { fills = kLow - kMax0; n.kMax = kLow; }
-      target = Math.min(100, (n.kMax || 0) * UNIT);
-      if ((n.kMax || 0) >= 2 && day.close >= level(t.ref, n.kMax - 2, sS)) {
-        n.mode = "vhold"; n.vZone = n.kMax - 2; target = 100; signal = "V자 반등, 남은 현금 전부 매수";
-      } else if (fills) signal = `말뚝 ${fills}개 체결`;
+      if (aboveMA) target = Math.min(100, (n.kMax || 0) * UNIT);
+      else { target = cur; if (fills) notes.push("200일선 아래라 말뚝 보류"); }
+      if ((n.kMax || 0) >= 2 && day.close >= level(t.ref, n.kMax - 2, sS) && aboveMA) { n.mode = "vhold"; n.vZone = n.kMax - 2; target = 100; signal = "V자 반등, 남은 현금 전부 매수"; }
+      else if (fills && aboveMA) signal = `말뚝 ${fills}개 체결`;
       if (mk.event) notes.push("새 −3%, 대기 재시작");
     }
   } else if (t.mode === "vhold") {
     if (exitReason) {
       const k = zoneOf(t.ref, day.close, sS);
-      n.mode = "rebal"; n.ref = day.close > t.ref ? r2(day.close) : level(t.ref, k, sS); n.kMax = 0; n.vZone = null; target = 100;
-      signal = exitReason + ", 리밸런싱 복귀";
+      n.mode = "rebal"; n.ref = day.close > t.ref ? r2(day.close) : level(t.ref, k, sS); n.kMax = 0; n.vZone = null; target = exitTarget(); signal = exitReason + (aboveMA ? ", 리밸런싱 복귀" : ", 200일선 아래라 전량 매도");
     } else {
       const k = zoneOf(t.ref, day.close, sS);
-      if (k >= (t.vZone || 0) + 3) {
-        n.mode = "stake"; n.ref = level(t.ref, k, sS); n.kMax = 0; n.vZone = null; target = 0;
-        signal = "3구간 하락, 전량 매도 후 말뚝박기 재진입";
-      } else target = 100;
+      if (k >= (t.vZone || 0) + 3) { n.mode = "stake"; n.ref = level(t.ref, k, sS); n.kMax = 0; n.vZone = null; target = 0; signal = "3구간 하락, 전량 매도 후 말뚝박기 재진입"; }
+      else target = 100;
       if (mk.event) notes.push("새 −3%, 대기 재시작");
     }
   } else {
-    // 평시 리밸런싱
+    // 평시
     if (cfg.crisis && mk.event) {
       const ref = t.ref || r2(day.close);
-      const k = zoneOf(ref, day.close, sS);
-      n.mode = "stake"; n.ref = ref; n.kMax = k; n.vZone = null; target = k * UNIT;
-      signal = `나스닥 ${fmtPct(mk.pct)}, 말뚝박기 진입`;
-    } else if (!t.ref || day.close > t.ref) {
-      signal = t.ref ? "전고점 갱신" : "기준가 설정";
-      n.ref = r2(day.close); n.kMax = 0; target = 100;
-    } else if (kMax0 >= 2 && day.close >= level(t.ref, kMax0 - 2, sR)) {
-      signal = "V자 반등"; n.ref = level(t.ref, kMax0 - 2, sR); n.kMax = 0; target = 100;
+      if (cfg.stake) { const k = zoneOf(ref, day.close, sS); n.mode = "stake"; n.ref = ref; n.kMax = k; n.vZone = null; target = aboveMA ? k * UNIT : 0; signal = `나스닥 ${fmtPct(mk.pct)}, 말뚝박기 진입`; }
+      else { n.mode = "wait"; n.ref = ref; n.kMax = 0; n.vZone = null; target = 0; signal = `나스닥 ${fmtPct(mk.pct)}, 전량 매도 후 대기`; }
     } else {
-      n.kMax = Math.max(kMax0, zoneOf(t.ref, day.close, sR)); target = 100 - n.kMax * UNIT;
+      let manual;
+      if (!t.ref || day.close > t.ref) { signal = t.ref ? "전고점 갱신" : "기준가 설정"; n.ref = r2(day.close); n.kMax = 0; manual = 100; }
+      else if (cfg.rebal && kMax0 >= rebuy && day.close >= level(t.ref, kMax0 - rebuy, sR)) { signal = "V자 반등"; n.ref = level(t.ref, kMax0 - rebuy, sR); n.kMax = 0; manual = 100; }
+      else if (cfg.rebal) { n.kMax = Math.max(kMax0, zoneR(t.ref, day.close)); manual = Math.max(0, 100 - n.kMax * unit); }
+      else manual = 100;
+      if (hasMA) {
+        if (!aboveMA) { target = 0; if (cur > 0) signal = "200일선 아래, 전량 매도"; }
+        else { target = manual; if (t.belowMA) signal = "200일선 회복, 매수"; }
+        n.belowMA = !aboveMA;
+      } else { target = manual; n.belowMA = null; }
     }
   }
   n.stock = target; n.lastDate = day.date; n.lastClose = day.close; n.lastLow = day.low;
-  n.action = describeMove(t.stock == null ? 100 : t.stock, target);
+  n.action = describeMove(cur, target);
   n.signal = [signal].concat(notes).filter(Boolean).join(", ");
   const entry = { date: day.date, close: day.close, low: day.low, mode: n.mode, stock: target, signal: n.signal, action: n.action, ref: n.ref };
   n.log = [entry].concat(t.log || []).slice(0, 40);
   return n;
 }
-const fmtPct = (n) => n == null || !Number.isFinite(n) ? "—" : (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(1) + "%";
-// ===== ENGINE END =====
+// ===== 엔진 끝 =====
+
+// ---------- 전략 프리셋 ----------
+const PRESETS = {
+  crash: { name: "−3% 대기만", cfg: { crisis: true, stake: false, ma200: false, rebal: false } },
+  crashma: { name: "−3% 대기 + 200일선", cfg: { crisis: true, stake: false, ma200: true, rebal: false } },
+  ma: { name: "200일선", cfg: { crisis: false, stake: false, ma200: true, rebal: false } },
+  rebal10: { name: "리밸런싱 7.5% / 10% / 2구간", cfg: { crisis: false, stake: false, ma200: false, rebal: true, stepRebal: 7.5, unit: 10, rebuy: 2 } },
+  rebal20: { name: "리밸런싱 7.5% / 20% / 2구간", cfg: { crisis: false, stake: false, ma200: false, rebal: true, stepRebal: 7.5, unit: 20, rebuy: 2 } },
+  book: { name: "책 매뉴얼 전체 (리밸 5/10/2 + 말뚝박기)", cfg: { crisis: true, stake: true, ma200: false, rebal: true, stepRebal: 5, unit: 10, rebuy: 2, stepStakeZero: 5, stepStakeHike: 7.5 } },
+};
+const RECOMMEND = {
+  TQQQ: [{ id: "crash", tag: "수익", note: "연복리 46%, 낙폭 −63% (2010~2026)" }, { id: "crashma", tag: "수비", note: "연복리 28%, 낙폭 −48%" }],
+  NVDA: [{ id: "ma", tag: "추천", note: "연복리 41%, 낙폭 −54% (1999~2026). 보유 37% / −90%보다 낫습니다" }],
+  BTC: [{ id: "rebal10", tag: "수익", note: "연복리 131%, 낙폭 −62% (2011~2026)" }, { id: "rebal20", tag: "수비", note: "연복리 99%, 낮폭 −28%" }],
+};
+const ADVICE = {
+  TQQQ: "말뚝박기와 평시 리밸런싱은 수익을 깎고 낙폭은 못 줄였습니다. 쓰지 않는 것을 권합니다.",
+  NVDA: "말뚝박기·위기 모드·리밸런싱 모두 불필요합니다. 2002년 같은 긴 하락에서 말뚝박기가 손실을 키웠고, 200일선 하나가 모든 조합을 이겼습니다.",
+  BTC: "나스닥 −3% 신호는 쓰지 않습니다. 리밸런싱만. 2배 상품(BITX)은 1배보다 수익 절반, 낙폭 두 배였습니다.",
+};
+const DEFAULT_ORDER = ["TQQQ", "NVDA", "BTC"];
+const DEFAULT_TICKERS = {
+  TQQQ: { desc: "나스닥100 3배", feed: "TQQQ", preset: "crash" },
+  NVDA: { desc: "엔비디아", feed: "NVDA", preset: "ma" },
+  BTC: { desc: "비트코인 현물", feed: "BTC/USD", preset: "rebal10" },
+};
+const CFG_FIELDS = ["crisis", "stake", "ma200", "rebal", "stepRebal", "unit", "rebuy", "stepStakeZero", "stepStakeHike"];
+function applyPreset(t, id) {
+  const p = PRESETS[id]; if (!p) return;
+  Object.assign(t, { crisis: false, stake: false, ma200: false, rebal: false }, p.cfg);
+  if (t.stepRebal == null) t.stepRebal = 7.5; if (t.unit == null) t.unit = 10; if (t.rebuy == null) t.rebuy = 2;
+  if (t.stepStakeZero == null) t.stepStakeZero = 5; if (t.stepStakeHike == null) t.stepStakeHike = 7.5;
+  t.strategy = id;
+}
+function presetMatch(t) {
+  for (const id of Object.keys(PRESETS)) {
+    const c = Object.assign({ crisis: false, stake: false, ma200: false, rebal: false }, PRESETS[id].cfg);
+    let ok = ["crisis", "stake", "ma200", "rebal"].every((f) => !!t[f] === !!c[f]);
+    if (ok && c.rebal) ok = t.stepRebal === c.stepRebal && t.unit === c.unit && t.rebuy === c.rebuy;
+    if (ok && c.stake) ok = t.stepStakeZero === c.stepStakeZero && t.stepStakeHike === c.stepStakeHike;
+    if (ok) return id;
+  }
+  return "custom";
+}
 
 // ---------- 저장 ----------
-const KEY_STATE = "rebal-web-v3", KEY_DATA = "rebal-data-v3", OLD_KEYS = ["rebal-web-v2", "rebal2x-web-v1"];
+const KEY_STATE = "rebal-web-v4", KEY_DATA = "rebal-data-v4", OLD_KEYS = ["rebal-web-v3", "rebal-web-v2", "rebal2x-web-v1"];
 const FX = "USD/KRW";
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch (e) {} },
 };
-const DEFAULT_ORDER = ["QLD", "TQQQ", "UPRO", "NVDA", "BITX"];
-const DEFAULT_TICKERS = {
-  QLD: { desc: "나스닥100 2배", crisis: true, stepRebal: 5, stepStakeZero: 5, stepStakeHike: 5 },
-  TQQQ: { desc: "나스닥100 3배", crisis: true, stepRebal: 5, stepStakeZero: 5, stepStakeHike: 7.5 },
-  UPRO: { desc: "S&P500 3배", crisis: true, stepRebal: 5, stepStakeZero: 5, stepStakeHike: 7.5 },
-  NVDA: { desc: "엔비디아 1배", crisis: true, stepRebal: 2.5, stepStakeZero: 2.5, stepStakeHike: 5 },
-  BITX: { desc: "비트코인 2배, 리밸런싱만", crisis: false, stepRebal: 5, stepStakeZero: 5, stepStakeHike: 5 },
-};
-const T_FIELDS = ["desc", "crisis", "stepRebal", "stepStakeZero", "stepStakeHike", "mode", "ref", "kMax", "stock", "vZone", "lastDate", "lastClose", "lastLow", "prevClose", "signal", "action", "log", "shares", "cash", "targetShares", "planPrice", "avgCost", "realized", "ledger", "undo"];
+const T_FIELDS = ["desc", "feed", "strategy"].concat(CFG_FIELDS, ["mode", "ref", "kMax", "stock", "vZone", "belowMA", "ma", "lastDate", "lastClose", "lastLow", "prevClose", "signal", "action", "log", "shares", "cash", "targetShares", "planPrice", "avgCost", "realized", "ledger", "undo"]);
 function newTicker(sym, def) {
-  return Object.assign({ sym, desc: sym, crisis: true, stepRebal: 5, stepStakeZero: 5, stepStakeHike: 7.5 }, def || {}, {
-    mode: "rebal", ref: null, kMax: 0, stock: 100, vZone: null, lastDate: null, lastClose: null, lastLow: null, prevClose: null, signal: "", action: "", log: [],
+  const t = Object.assign({ sym, desc: sym, feed: sym }, def || {}, {
+    mode: "rebal", ref: null, kMax: 0, stock: 100, vZone: null, belowMA: null, ma: null, lastDate: null, lastClose: null, lastLow: null, prevClose: null, signal: "", action: "", log: [],
     shares: 0, cash: 0, targetShares: null, planPrice: null, avgCost: 0, realized: {}, ledger: [], undo: null,
   });
+  applyPreset(t, (def && def.preset) || "crash");
+  return t;
 }
 const defaultSettings = () => ({ apiKey: "", ndx: "ONEQ", threshold: -3, regime: "hike" });
-function hydrate(raw) {
+function hydrate(raw, migrating) {
   const s = raw || {};
-  const order = Array.isArray(s.order) && s.order.length ? s.order.slice() : DEFAULT_ORDER.slice();
+  let order = Array.isArray(s.order) && s.order.length ? s.order.slice() : DEFAULT_ORDER.slice();
+  if (migrating) {
+    order = order.filter((x) => x !== "BITX");
+    order = DEFAULT_ORDER.concat(order.filter((x) => !DEFAULT_ORDER.includes(x)));
+  }
   const tickers = {};
   for (const sym of order) {
     const saved = (s.tickers && s.tickers[sym]) || {};
     const t = newTicker(sym, DEFAULT_TICKERS[sym]);
     for (const f of T_FIELDS) if (saved[f] !== undefined && saved[f] !== null) t[f] = saved[f];
-    if (saved.crisis === false) t.crisis = false;
+    if (migrating) {
+      if (DEFAULT_TICKERS[sym]) { applyPreset(t, DEFAULT_TICKERS[sym].preset); t.desc = DEFAULT_TICKERS[sym].desc; t.feed = DEFAULT_TICKERS[sym].feed; }
+      else if (saved.crisis !== undefined && saved.stepRebal !== undefined) { t.strategy = "book"; t.rebal = true; t.stake = true; t.ma200 = false; t.unit = 10; t.rebuy = 2; }
+      if ((t.mode === "stake" || t.mode === "vhold") && !t.stake) { t.mode = "wait"; }
+    }
+    if (!t.strategy) t.strategy = presetMatch(t);
     tickers[sym] = t;
   }
   return { settings: Object.assign(defaultSettings(), s.settings || {}), order, tickers, market: s.market || null, fx: s.fx || null, tab: order.includes(s.tab) ? s.tab : order[0] };
 }
 function load() {
-  let s = store.get(KEY_STATE);
-  if (!s) for (const k of OLD_KEYS) { const o = store.get(k); if (o) { s = { settings: o.settings, tickers: o.tickers, market: o.market, tab: o.tab }; break; } }
-  return hydrate(s);
+  let s = store.get(KEY_STATE), migrating = false;
+  if (!s) for (const k of OLD_KEYS) { const o = store.get(k); if (o) { s = o; migrating = true; break; } }
+  return hydrate(s, migrating);
 }
 let state = load();
 let data = store.get(KEY_DATA) || null;
@@ -334,7 +386,8 @@ let memoryOnly = false;
 let lockUntil = 0;
 function save() { if (!store.set(KEY_STATE, state)) memoryOnly = true; }
 const stakeStepOf = (t) => state.settings.regime === "zero" ? t.stepStakeZero : t.stepStakeHike;
-const cfgFor = (t) => ({ stepRebal: t.stepRebal, stepStake: stakeStepOf(t), crisis: !!t.crisis });
+const cfgFor = (t) => ({ crisis: !!t.crisis, stake: !!t.stake, ma200: !!t.ma200, rebal: !!t.rebal, stepRebal: t.stepRebal || 7.5, unit: t.unit || 10, rebuy: t.rebuy || 2, stepStake: stakeStepOf(t) || 5 });
+const isCrypto = (t) => /\//.test(t.feed || "");
 
 // ---------- 표시 유틸 ----------
 const fmt = (n) => n == null || !Number.isFinite(n) ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -344,8 +397,9 @@ const money = (n) => { const k = krw(n); return usd(n) + (k ? ` (${k})` : ""); }
 const zoneLabel = (k, step) => k === 0 ? "기준가" : "−" + r2(k * step) + "%";
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const md = (d) => d ? d.slice(5).replace("-", "/") : "—";
-const modeLabel = { rebal: "리밸런싱", stake: "말뚝박기", vhold: "V반등 보유" };
+const modeLabel = { rebal: "평시", wait: "−3% 대기", stake: "말뚝박기", vhold: "V반등 보유" };
 const todayLocal = () => { const d = new Date(); const p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+const todayUTC = () => new Date().toISOString().slice(0, 10);
 function nyNow() {
   const f = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short" });
   const p = {};
@@ -357,13 +411,27 @@ function isLive(barDate) {
   return barDate === n.date && n.minutes >= 9 * 60 + 30 && n.minutes < 16 * 60 + 5 && n.weekday !== "Sat" && n.weekday !== "Sun";
 }
 function showMsg(text, kind) { document.getElementById("msg").innerHTML = text ? `<div class="msg ${kind || ""}">${esc(text)}</div>` : ""; }
+function ruleText(t) {
+  const parts = [];
+  if (t.crisis) parts.push(t.stake ? "−3% 위기 모드(말뚝박기)" : "−3% 전량매도·대기");
+  if (t.ma200) parts.push("200일선 필터");
+  if (t.rebal) parts.push(`리밸런싱 ${t.stepRebal}% / ${t.unit}% / ${t.rebuy}구간`);
+  if (t.stake) parts.push(`말뚝 간격 ${stakeStepOf(t)}%`);
+  return parts.length ? parts.join(", ") : "규칙 없음 (보유)";
+}
+
+// ---------- 200일선 ----------
+function maSeries(bars, n) {
+  const out = new Array(bars.length).fill(null); let sum = 0;
+  for (let i = 0; i < bars.length; i++) { sum += bars[i].close; if (i >= n) sum -= bars[i - n].close; if (i >= n - 1) out[i] = sum / n; }
+  return out;
+}
 
 // ---------- 보유·계획 ----------
 const totalOf = (t, p) => (t.shares || 0) * (p || 0) + (t.cash || 0);
 function setTarget(t, stockPct, price) {
   if (!price) return;
-  const total = totalOf(t, price);
-  t.targetShares = Math.max(0, Math.round(total * stockPct / 100 / price)); t.planPrice = price;
+  t.targetShares = Math.max(0, Math.round(totalOf(t, price) * stockPct / 100 / price)); t.planPrice = price;
 }
 function planOf(t) {
   if (t.targetShares == null || !t.lastClose) return null;
@@ -373,27 +441,18 @@ function planOf(t) {
   return { side: diff > 0 ? "매수" : "매도", qty: Math.abs(diff), price, amount: Math.abs(diff) * price };
 }
 const planText = (p) => p ? `${p.qty}주 ${p.side}, 약 ${money(p.amount)}` : "그대로 유지";
-// 엔진 결과(주식 비율 변화)를 목표 수량으로 옮긴다
 function afterEngine(prev, n) {
   if (n.mode === "stake" && prev.mode === "stake" && n.stock > prev.stock && n.stock < 100 && !/반등/.test(n.signal || "")) {
     const sS = stakeStepOf(n) / 100, total = totalOf(prev, n.lastClose);
     let qty = 0, cost = 0;
-    for (let i = (prev.kMax || 0) + 1; i <= (n.kMax || 0); i++) {
-      const lv = level(prev.ref, i, sS);
-      const q = Math.floor(total * 0.1 / lv);
-      qty += q; cost += q * lv;
-    }
+    for (let i = (prev.kMax || 0) + 1; i <= (n.kMax || 0); i++) { const lv = level(prev.ref, i, sS); const q = Math.floor(total * 0.1 / lv); qty += q; cost += q * lv; }
     n.targetShares = (prev.targetShares == null ? prev.shares : prev.targetShares) + qty;
     n.planPrice = qty ? cost / qty : n.lastClose;
-  } else if (n.stock !== prev.stock) {
-    setTarget(n, n.stock, n.lastClose);
-  }
+  } else if (n.stock !== prev.stock) setTarget(n, n.stock, n.lastClose);
   return n;
 }
 function snapshot(t) { return { shares: t.shares, cash: t.cash, targetShares: t.targetShares, planPrice: t.planPrice, avgCost: t.avgCost, realized: JSON.parse(JSON.stringify(t.realized || {})), ledger: (t.ledger || []).slice() }; }
-function ledgerAdd(t, type, qty, price, amount) {
-  t.ledger = [{ date: todayLocal(), type, qty, price, amount: r2(amount), shares: t.shares, cash: r2(t.cash) }].concat(t.ledger || []).slice(0, 200);
-}
+function ledgerAdd(t, type, qty, price, amount) { t.ledger = [{ date: todayLocal(), type, qty, price, amount: r2(amount), shares: t.shares, cash: r2(t.cash) }].concat(t.ledger || []).slice(0, 200); }
 function doBuy(t, qty, price, useCash) {
   if (qty <= 0) return;
   const old = t.shares || 0;
@@ -428,8 +487,7 @@ function deposit(sym) {
   const t = state.tickers[sym];
   const amt = parseFloat(document.getElementById("dep-" + sym).value);
   if (!Number.isFinite(amt) || amt === 0) { showMsg("입금액을 넣어주세요.", "err"); return; }
-  t.undo = snapshot(t);
-  t.cash = r2((t.cash || 0) + amt);
+  t.undo = snapshot(t); t.cash = r2((t.cash || 0) + amt);
   ledgerAdd(t, amt > 0 ? "입금" : "출금", 0, 0, amt);
   setTarget(t, t.stock, t.lastClose);
   save(); render(); showMsg(`${sym} 현금 ${money(amt)} 반영. ${planOf(t) ? "계획: " + planText(planOf(t)) : "매매 없음"}`);
@@ -439,9 +497,7 @@ function extraBuy(sym) {
   const qty = Math.round(parseFloat(document.getElementById("xb-qty-" + sym).value));
   const price = parseFloat(document.getElementById("xb-price-" + sym).value);
   if (!qty || qty <= 0 || !Number.isFinite(price) || price <= 0) { showMsg("수량과 단가를 넣어주세요.", "err"); return; }
-  t.undo = snapshot(t);
-  doBuy(t, qty, price, false);
-  ledgerAdd(t, "추가매수", qty, price, qty * price);
+  t.undo = snapshot(t); doBuy(t, qty, price, false); ledgerAdd(t, "추가매수", qty, price, qty * price);
   if (t.targetShares != null) t.targetShares += qty;
   save(); render(); showMsg(`${sym} ${qty}주 추가 매수 반영했습니다.`);
 }
@@ -461,14 +517,8 @@ async function fetchSeries(key, symbols, optional) {
   const out = {};
   for (const sym of symbols) {
     const obj = symbols.length === 1 ? j : j[sym];
-    if (!obj || obj.status === "error" || !Array.isArray(obj.values)) {
-      if (optional.includes(sym)) continue;
-      throw new Error(`${sym}: ${(obj && obj.message) || "데이터 없음"}`);
-    }
-    out[sym] = obj.values
-      .map((v) => ({ date: String(v.datetime).slice(0, 10), close: Number(v.close), low: Number(v.low) }))
-      .filter((v) => Number.isFinite(v.close))
-      .reverse();
+    if (!obj || obj.status === "error" || !Array.isArray(obj.values)) { if (optional.includes(sym)) continue; throw new Error(`${sym}: ${(obj && obj.message) || "데이터 없음"}`); }
+    out[sym] = obj.values.map((v) => ({ date: String(v.datetime).slice(0, 10), close: Number(v.close), low: Number(v.low) })).filter((v) => Number.isFinite(v.close)).reverse();
   }
   return out;
 }
@@ -480,38 +530,43 @@ function marketFromData() {
   const live = isLive(lastBar.date);
   return { market: buildMarket(live ? ndx.slice(0, -1) : ndx, state.settings.threshold), liveBar: live ? lastBar : null, liveDate: live ? lastBar.date : null };
 }
+function completeBars(t, liveDate) {
+  const raw = (data && data.bars && data.bars[t.feed || t.sym]) || [];
+  const cut = isCrypto(t) ? todayUTC() : liveDate;
+  return raw.filter((b) => b.date !== cut && Number.isFinite(b.low));
+}
 function applyData() {
   const { market, liveBar, liveDate } = marketFromData();
   if (!market) throw new Error("나스닥 대용 심볼 데이터가 없습니다.");
   for (const sym of state.order) {
     const t = state.tickers[sym];
-    const bars = (data.bars[sym] || []).filter((b) => b.date !== liveDate && Number.isFinite(b.low));
+    const bars = completeBars(t, liveDate);
     if (!bars.length) continue;
+    const mas = maSeries(bars, 200);
     const prevBar = bars.length > 1 ? bars[bars.length - 2] : null;
     if (!t.lastDate) {
       const b = bars[bars.length - 1];
-      t.lastDate = b.date; t.lastClose = b.close; t.lastLow = b.low; t.prevClose = prevBar ? prevBar.close : null;
+      t.lastDate = b.date; t.lastClose = b.close; t.lastLow = b.low; t.prevClose = prevBar ? prevBar.close : null; t.ma = mas[bars.length - 1] != null ? r2(mas[bars.length - 1]) : null;
       if (!t.ref) t.ref = r2(b.close);
+      if (t.ma200 && t.ma != null) t.belowMA = b.close <= t.ma;
       t.action = "기준가와 보유 수량을 확인하세요"; t.signal = "시작";
       t.log = [{ date: b.date, close: b.close, low: b.low, mode: t.mode, stock: t.stock, signal: "시작", action: "", ref: t.ref }].concat(t.log || []);
       continue;
     }
     let cur = t;
     const cfg = cfgFor(t);
-    for (const b of bars) {
+    for (let i = 0; i < bars.length; i++) {
+      const b = bars[i];
       if (b.date <= t.lastDate) continue;
-      cur = afterEngine(cur, stepTicker(cur, cfg, { date: b.date, close: b.close, low: b.low, mk: market.byDate[b.date] || {} }));
+      cur = afterEngine(cur, stepTicker(cur, cfg, { date: b.date, close: b.close, low: b.low, mk: market.byDate[b.date] || {}, ma: mas[i] }));
     }
     cur.prevClose = prevBar ? prevBar.close : cur.prevClose;
     if (cur.lastDate === bars[bars.length - 1].date) { cur.lastClose = bars[bars.length - 1].close; cur.lastLow = bars[bars.length - 1].low; }
+    if (mas[bars.length - 1] != null) cur.ma = r2(mas[bars.length - 1]);
     state.tickers[sym] = cur;
   }
   const L = market.last;
-  state.market = L ? {
-    sym: state.settings.ndx.toUpperCase(), date: L.date, pct: L.pct, crisis: L.crisis, lastEvent: L.lastEvent, waitUntil: L.waitUntil,
-    waitMonths: L.waitMonths, streak: L.streak, events: L.recentEvents,
-    live: liveBar ? { pct: (liveBar.close / L.close - 1) * 100 } : null,
-  } : null;
+  state.market = L ? { sym: state.settings.ndx.toUpperCase(), date: L.date, pct: L.pct, crisis: L.crisis, lastEvent: L.lastEvent, waitUntil: L.waitUntil, waitMonths: L.waitMonths, streak: L.streak, events: L.recentEvents, live: liveBar ? { pct: (liveBar.close / L.close - 1) * 100 } : null } : null;
   const fx = data.bars[FX];
   if (fx && fx.length) state.fx = { rate: fx[fx.length - 1].close, date: fx[fx.length - 1].date };
   save();
@@ -523,19 +578,15 @@ async function refresh() {
   const btn = document.getElementById("refresh");
   btn.disabled = true; btn.textContent = "불러오는 중…";
   try {
-    const symbols = Array.from(new Set([s.ndx.toUpperCase()].concat(state.order, [FX])));
+    const feeds = state.order.map((sym) => (state.tickers[sym].feed || sym).toUpperCase());
+    const symbols = Array.from(new Set([s.ndx.toUpperCase()].concat(feeds, [FX])));
     const bars = await fetchSeries(s.apiKey, symbols, [FX]);
     data = { fetchedAt: new Date().toISOString(), bars };
     store.set(KEY_DATA, data);
     applyData();
     showMsg("");
-  } catch (e) {
-    showMsg("시세를 불러오지 못했습니다: " + (e && e.message ? e.message : e), "err");
-  } finally {
-    lockUntil = Date.now() + 60000;
-    tickLock();
-    render();
-  }
+  } catch (e) { showMsg("시세를 불러오지 못했습니다: " + (e && e.message ? e.message : e), "err"); }
+  finally { lockUntil = Date.now() + 60000; tickLock(); render(); }
 }
 function tickLock() {
   const btn = document.getElementById("refresh");
@@ -550,8 +601,7 @@ function reevaluate(t) {
   const { market } = marketFromData();
   const mk = market ? market.byDate[t.lastDate] || {} : {};
   const base = Object.assign({}, t, { log: (t.log || []).filter((e) => e.date !== t.lastDate) });
-  const n = stepTicker(base, cfgFor(t), { date: t.lastDate, close: t.lastClose, low: t.lastLow == null ? t.lastClose : t.lastLow, mk });
-  Object.assign(t, n);
+  Object.assign(t, stepTicker(base, cfgFor(t), { date: t.lastDate, close: t.lastClose, low: t.lastLow == null ? t.lastClose : t.lastLow, mk, ma: t.ma }));
 }
 function manualSave(sym) {
   const t = state.tickers[sym];
@@ -560,36 +610,52 @@ function manualSave(sym) {
   const modeEl = document.getElementById("mode-" + sym);
   const mode = modeEl ? modeEl.value : "rebal";
   if (Number.isFinite(ref) && ref > 0) t.ref = r2(ref);
-  if (Number.isFinite(stock)) t.stock = Math.max(0, Math.min(100, Math.round(stock / UNIT) * UNIT));
+  if (Number.isFinite(stock)) t.stock = Math.max(0, Math.min(100, Math.round(stock / 10) * 10));
   if (Number.isFinite(shares)) t.shares = Math.max(0, Math.round(shares));
   if (Number.isFinite(cash)) t.cash = r2(Math.max(0, cash));
   if (Number.isFinite(avg) && avg >= 0) t.avgCost = avg;
   t.mode = mode;
-  if (mode === "rebal") { t.kMax = (100 - t.stock) / UNIT; t.vZone = null; }
-  else if (mode === "stake") { t.kMax = t.stock / UNIT; t.vZone = null; }
+  const belowNow = t.ma200 && t.ma != null && t.lastClose != null && t.lastClose <= t.ma;
+  if (mode === "rebal") { t.kMax = t.rebal && !belowNow ? Math.max(0, Math.round((100 - t.stock) / (t.unit || 10))) : 0; t.vZone = null; t.belowMA = t.ma200 ? belowNow : null; }
+  else if (mode === "wait") { t.kMax = 0; t.vZone = null; t.stock = 0; }
+  else if (mode === "stake") { t.kMax = t.stock / 10; t.vZone = null; }
   else { t.kMax = 0; t.vZone = t.ref && t.lastClose != null ? zoneOf(t.ref, t.lastClose, stakeStepOf(t) / 100) : 0; t.stock = 100; }
   const entered = t.stock;
   reevaluate(t);
   t.undo = null;
-  if (t.stock !== entered && t.lastClose) { setTarget(t, t.stock, t.lastClose); }
+  if (t.stock !== entered && t.lastClose) setTarget(t, t.stock, t.lastClose);
   else { t.targetShares = t.shares; t.planPrice = t.lastClose; }
   save(); render();
-  showMsg(sym + " 수동 조정을 저장했습니다." + (t.stock !== entered ? ` 매뉴얼상 지금 구간은 주식 ${t.stock}%라 계획을 냈습니다.` : " 지금 보유를 목표로 봅니다."));
+  showMsg(sym + " 수동 조정을 저장했습니다." + (t.stock !== entered ? ` 규칙상 지금은 주식 ${t.stock}%라 계획을 냈습니다.` : " 지금 보유를 목표로 봅니다."));
 }
 function fillHigh(sym) {
-  const bars = data && data.bars && data.bars[sym];
+  const t = state.tickers[sym];
+  const bars = data && data.bars && data.bars[t.feed || sym];
   if (!bars || !bars.length) { showMsg("먼저 시세를 불러오세요."); return; }
   const hi = Math.max.apply(null, bars.slice(-250).map((b) => b.close));
   document.getElementById("ref-" + sym).value = r2(hi);
   showMsg(`${sym} 최근 1년 최고 종가 ${fmt(hi)}를 넣었습니다. 저장을 누르면 반영됩니다.`);
 }
 function resetTicker(sym) {
-  if (!window.confirm(sym + " 매뉴얼 기록을 지울까요? 보유 수량·현금·원장은 남깁니다.")) return;
+  if (!window.confirm(sym + " 매뉴얼 기록을 지울까요? 보유 수량·현금·원장·전략 설정은 남깁니다.")) return;
   const k = state.tickers[sym];
-  const t = newTicker(sym, { desc: k.desc, crisis: k.crisis, stepRebal: k.stepRebal, stepStakeZero: k.stepStakeZero, stepStakeHike: k.stepStakeHike });
+  const t = newTicker(sym, { desc: k.desc, feed: k.feed, preset: k.strategy in PRESETS ? k.strategy : "crash" });
+  for (const f of CFG_FIELDS) t[f] = k[f]; t.strategy = k.strategy;
   Object.assign(t, { shares: k.shares, cash: k.cash, avgCost: k.avgCost, realized: k.realized, ledger: k.ledger });
   state.tickers[sym] = t;
   save(); render();
+}
+function changeStrategy(sym, id) {
+  const t = state.tickers[sym];
+  if (id === "custom") { t.strategy = "custom"; save(); render(); document.getElementById("settings").open = true; showMsg("설정에서 규칙 부품을 직접 바꾸세요."); return; }
+  applyPreset(t, id);
+  if ((t.mode === "stake" || t.mode === "vhold") && !t.stake) t.mode = "wait";
+  if (t.mode === "wait" && !t.crisis) t.mode = "rebal";
+  if (t.mode === "rebal") { t.kMax = t.rebal ? Math.max(0, Math.round((100 - t.stock) / (t.unit || 10))) : 0; }
+  reevaluate(t);
+  if (t.lastClose) setTarget(t, t.stock, t.lastClose);
+  save(); render();
+  showMsg(`${sym} 전략을 "${PRESETS[id].name}"로 바꿨습니다. 오늘 할 일을 확인하세요.`);
 }
 function simulate(sym) {
   const t = state.tickers[sym];
@@ -600,7 +666,7 @@ function simulate(sym) {
   const m = state.market || {};
   const pct = Number.isFinite(ndxPct) ? ndxPct : 0;
   const mk = { date: "가정", pct, event: pct <= state.settings.threshold, streak: pct > 0 ? (m.streak || 0) + 1 : 0, lastEvent: m.lastEvent, waitUntil: m.waitUntil, waitMonths: m.waitMonths };
-  const n = afterEngine(t, stepTicker(Object.assign({}, t, { log: [] }), cfgFor(t), { date: "가정", close, low: close, mk }));
+  const n = afterEngine(t, stepTicker(Object.assign({}, t, { log: [] }), cfgFor(t), { date: "가정", close, low: close, mk, ma: t.ma }));
   const p = planOf(n);
   out.innerHTML = `<b>${modeLabel[n.mode]}</b>, ${n.signal ? esc(n.signal) + ": " : ""}${esc(n.action)}<br>→ ${esc(planText(p))}`;
 }
@@ -618,20 +684,24 @@ function renderTotal() {
   const el = document.getElementById("total");
   if (!any || value <= 0) { el.innerHTML = ""; return; }
   const k = krw(value);
-  el.innerHTML = `<section class="card total"><h2>총자산</h2><div class="big">${usd(value)}${k ? `<span class="krw">${k}</span>` : ""}</div><div class="chg ${chg > 0 ? "up" : chg < 0 ? "down" : ""}" style="color:${chg > 0 ? "var(--up)" : chg < 0 ? "var(--down)" : "var(--dim)"}">전일 대비 ${chg >= 0 ? "+" : ""}${money(chg)}${state.fx ? ` · 환율 ${Math.round(state.fx.rate).toLocaleString("ko-KR")}원` : ""}</div></section>`;
+  el.innerHTML = `<section class="card total"><h2>총자산</h2><div class="big">${usd(value)}${k ? `<span class="krw">${k}</span>` : ""}</div><div class="chg" style="color:${chg > 0 ? "var(--up)" : chg < 0 ? "var(--down)" : "var(--dim)"}">전일 대비 ${chg >= 0 ? "+" : ""}${money(chg)}${state.fx ? ` · 환율 ${Math.round(state.fx.rate).toLocaleString("ko-KR")}원` : ""}</div></section>`;
 }
 function renderMarket() {
   const el = document.getElementById("market");
   const m = state.market;
-  if (!m) { el.innerHTML = `<section class="card market"><div class="state">대기 중</div><div class="mline">시세를 불러오면 나스닥 −3% 여부와 대기 기간이 여기에 표시됩니다.</div></section>`; return; }
+  const users = state.order.filter((s) => state.tickers[s].crisis);
+  const who = users.length ? `적용 종목: ${users.join(", ")}` : "지금은 적용 종목 없음";
+  if (!m) { el.innerHTML = `<section class="card market"><div class="state">대기 중</div><div class="mline">시세를 불러오면 나스닥 −3% 여부와 대기 기간이 표시됩니다. ${who}</div></section>`; return; }
   const lines = [];
   lines.push(`나스닥(${esc(m.sym)}) ${md(m.date)} 종가 ${fmtPct(m.pct)}, 연속 상승 ${m.streak}일${m.streak >= 8 ? " (8일 달성, 전량 매수 신호)" : ""}`);
   if (m.live) lines.push(`미국 장중, 현재 ${fmtPct(m.live.pct)} (확정 전이라 반영하지 않음)`);
   if (m.lastEvent) lines.push(`−3% 발생 ${m.events.map(md).join(", ")} (${m.events.length}회), 대기 종료 ${m.waitUntil} (${m.waitMonths === 2 ? "두 달" : "한 달"}+1일)`);
   else lines.push("최근 1년 나스닥 −3% 없음");
-  const dday = m.crisis ? daysBetween(nyNow().date, m.waitUntil) : null;
+  lines.push(who);
+  const dday = m.crisis ? Math.max(0, daysBetween(m.date, m.waitUntil)) : null;
   el.innerHTML = `<section class="card market ${m.crisis ? "crisis" : ""}"><div class="state">${m.crisis ? `위기<small>대기 종료까지 ${dday}일</small>` : "평시"}</div>${lines.map((l) => `<div class="mline">${l}</div>`).join("")}</section>`;
 }
+const dotClass = (t) => (t.mode !== "rebal" && t.crisis) ? t.mode : (t.ma200 && t.belowMA ? "wait" : "");
 function renderSummary() {
   let count = 0;
   const rows = state.order.map((sym) => {
@@ -640,135 +710,133 @@ function renderSummary() {
     if (p) count++;
     const dir = p ? (p.side === "매수" ? "up" : "down") : "";
     const txt = !t.lastDate ? "시세 대기" : p ? planText(p) : (t.signal && t.signal !== "시작" ? t.signal + ", " : "") + "그대로 유지";
-    return `<button type="button" class="sumrow ${p ? "" : "quiet"}" data-tab="${sym}"><b>${sym}</b><span class="dot ${t.mode !== "rebal" && t.crisis ? t.mode : ""}"></span><span class="txt ${dir}">${esc(txt)}</span></button>`;
+    return `<button type="button" class="sumrow ${p ? "" : "quiet"}" data-tab="${esc(sym)}"><b>${esc(sym)}</b><span class="dot ${dotClass(t)}"></span><span class="txt ${dir}">${esc(txt)}</span></button>`;
   }).join("");
   const d = state.tickers[state.order[0]].lastDate;
   document.getElementById("summary").innerHTML = `<section class="card summary"><h2>오늘 할 일${d ? ` (${md(d)} 종가 기준)` : ""}</h2>${rows}</section>`;
-  document.title = count ? `● 매매 ${count}건 | 레버리지 리밸런싱` : "레버리지 리밸런싱";
+  document.title = count ? `● 매매 ${count}건 | 매매 매뉴얼` : "매매 매뉴얼";
 }
 function renderTabs() {
-  document.getElementById("tabs").innerHTML = state.order.map((sym) => {
-    const t = state.tickers[sym];
-    return `<button type="button" class="tab ${state.tab === sym ? "on" : ""}" data-tab="${sym}"><span class="dot ${t.mode !== "rebal" && t.crisis ? t.mode : ""}"></span>${sym}</button>`;
-  }).join("");
+  document.getElementById("tabs").innerHTML = state.order.map((sym) => `<button type="button" class="tab ${state.tab === sym ? "on" : ""}" data-tab="${esc(sym)}"><span class="dot ${dotClass(state.tickers[sym])}"></span>${esc(sym)}</button>`).join("");
 }
 function renderTable(t, cfg) {
-  const active = t.mode === "rebal" ? "rebal" : "stake";
-  const step = active === "rebal" ? cfg.stepRebal : cfg.stepStake;
+  const stakeMode = t.mode === "stake" || t.mode === "vhold";
+  const step = stakeMode ? cfg.stepStake : cfg.stepRebal;
+  const unit = stakeMode ? UNIT : cfg.unit;
+  const zones = stakeMode ? ZONES : Math.max(1, Math.round(100 / unit));
   const s = step / 100;
-  const both = t.crisis && cfg.stepRebal === cfg.stepStake;
-  const kNow = t.lastClose != null ? zoneOf(t.ref, t.lastClose, s) : -1;
+  const kNow = t.lastClose != null ? zoneOf(t.ref, t.lastClose, s, zones) : -1;
   const kMax = t.kMax || 0;
-  const head = both
-    ? `<th>구간</th><th>가격</th><th class="${active === "rebal" ? "" : "off"}">평시 주식/현금</th><th class="${active === "stake" ? "" : "off"}">위기 주식/현금</th>`
-    : `<th>구간</th><th>가격</th><th>주식</th><th>현금</th>`;
   let rows = "";
-  for (let i = 0; i <= ZONES; i++) {
-    const cur = i === kNow;
-    const done = i >= 1 && i <= kMax && t.mode !== "vhold";
-    const reb = `${100 - i * UNIT} / ${i * UNIT}`, stk = `${i * UNIT} / ${100 - i * UNIT}`;
-    const cells = both
-      ? `<td class="${active === "rebal" ? (done ? "done" : "") : "off"}">${active === "rebal" && done ? "✓ " : ""}${reb}</td><td class="${active === "stake" ? (done ? "done" : "") : "off"}">${active === "stake" && done ? "✓ " : ""}${stk}</td>`
-      : active === "rebal"
-      ? `<td class="${done ? "done" : ""}">${done ? "✓ " : ""}${100 - i * UNIT}%</td><td>${i * UNIT}%</td>`
-      : `<td class="${done ? "done" : ""}">${done ? "✓ " : ""}${i * UNIT}%</td><td>${100 - i * UNIT}%</td>`;
-    rows += `<tr class="${cur ? "cur" : ""}" style="background:${cur ? "#D6E3FA" : i === 0 ? "transparent" : `rgba(47,111,214,${(0.03 + i * 0.02).toFixed(3)})`}"><td>${zoneLabel(i, step)}</td><td>${fmt(level(t.ref, i, s))}</td>${cells}</tr>`;
+  for (let i = 0; i <= zones; i++) {
+    const cur = i === kNow, done = i >= 1 && i <= kMax && t.mode !== "vhold";
+    const stock = stakeMode ? i * UNIT : Math.max(0, 100 - i * unit);
+    rows += `<tr class="${cur ? "cur" : ""}" style="background:${cur ? "#D6E3FA" : i === 0 ? "transparent" : `rgba(47,111,214,${(0.03 + i * 0.02).toFixed(3)})`}"><td>${zoneLabel(i, step)}</td><td>${fmt(level(t.ref, i, s))}</td><td class="${done ? "done" : ""}">${done ? "✓ " : ""}${stock}%</td><td>${100 - stock}%</td></tr>`;
   }
-  const note = active === "rebal"
-    ? `종가가 그 행의 가격 아래로 마감하면 그 비율로 맞춥니다 (간격 ${step}%). ✓는 이미 판 구간.`
-    : `장중 저가가 그 행의 가격에 닿으면 10% 매수합니다 (간격 ${step}%). ✓는 이미 체결된 말뚝.`;
-  return `<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table><p class="note">${note}</p>`;
+  const note = stakeMode ? `장중 저가가 그 행의 가격에 닿으면 10% 매수합니다 (간격 ${step}%). ✓는 이미 체결된 말뚝.` : `종가가 그 행의 가격 아래로 마감하면 그 비율로 맞춥니다 (간격 ${step}%, ${unit}%씩). ✓는 이미 판 구간. ${cfg.rebuy}구간 위로 종가가 올라오면 전량 매수.`;
+  return `<table><thead><tr><th>구간</th><th>가격</th><th>주식</th><th>현금</th></tr></thead><tbody>${rows}</tbody></table><p class="note">${note}</p>`;
 }
 function renderPanel() {
   if (!state.tickers[state.tab]) state.tab = state.order[0];
   const t = state.tickers[state.tab];
   const cfg = cfgFor(t);
-  const active = t.mode === "rebal" ? "rebal" : "stake";
-  const step = active === "rebal" ? cfg.stepRebal : cfg.stepStake;
+  const stakeMode = t.mode === "stake" || t.mode === "vhold";
+  const step = stakeMode ? cfg.stepStake : cfg.stepRebal;
+  const unit = stakeMode ? UNIT : cfg.unit;
+  const zones = stakeMode ? ZONES : Math.max(1, Math.round(100 / unit));
   const s = step / 100;
   const has = t.ref && t.lastClose != null;
   const kMax = t.kMax || 0;
-  const badge = t.crisis ? `<span class="badge ${t.mode === "rebal" ? "" : t.mode}">${modeLabel[t.mode] || "리밸런싱"}</span>` : `<span class="badge">리밸런싱만</span>`;
+  const badge = `<span class="badge ${t.mode === "rebal" ? "" : t.mode}">${t.mode === "rebal" ? (t.ma200 && t.belowMA ? "200일선 아래" : t.rebal ? "리밸런싱" : "평시") : modeLabel[t.mode]}</span>`;
   const p = planOf(t);
+  const recs = RECOMMEND[t.sym] || [];
+  const options = recs.map((r) => `<option value="${r.id}" ${t.strategy === r.id ? "selected" : ""}>${r.tag}: ${PRESETS[r.id].name}</option>`)
+    .concat(Object.keys(PRESETS).filter((id) => !recs.some((r) => r.id === id)).map((id) => `<option value="${id}" ${t.strategy === id ? "selected" : ""}>${PRESETS[id].name}</option>`))
+    .concat([`<option value="custom" ${t.strategy === "custom" ? "selected" : ""}>직접 설정</option>`]).join("");
+  const rec = recs.find((r) => r.id === t.strategy);
+  const stratLine = `<div class="strat"><select data-strategy="${esc(t.sym)}">${options}</select></div><p class="rule">${esc(ruleText(t))}${rec ? `<br>백테스트: ${esc(rec.note)}` : ""}${ADVICE[t.sym] ? `<br>${esc(ADVICE[t.sym])}` : ""}</p>`;
   let hold = "", status = "";
   if (has) {
     const total = totalOf(t, t.lastClose), val = (t.shares || 0) * t.lastClose;
     const pnl = t.avgCost ? (t.lastClose - t.avgCost) * (t.shares || 0) : null;
     const y = todayLocal().slice(0, 4), real = t.realized && t.realized[y];
     hold = `<div class="hold">보유 <b>${t.shares || 0}주</b> × ${fmt(t.lastClose)} = ${usd(val)}, 현금 <b>${usd(t.cash || 0)}</b>, 총 <b>${money(total)}</b>${t.avgCost ? `<br>평단 ${fmt(t.avgCost)}, 평가손익 ${pnl >= 0 ? "+" : ""}${money(pnl)}` : ""}${real ? `, 올해 실현 ${real >= 0 ? "+" : ""}${money(real)}` : ""}</div>`;
-    const k = zoneOf(t.ref, t.lastClose, s);
+    const k = zoneOf(t.ref, t.lastClose, s, zones);
     const dd = (t.lastClose / t.ref - 1) * 100;
     const dir = p ? (p.side === "매수" ? "up" : "down") : "";
     const guide = [];
+    const m = state.market || {};
+    if (t.ma200) guide.push(t.ma != null ? `200일선 ${fmt(t.ma)}, 지금 ${t.lastClose > t.ma ? "위" : "아래"} (${fmtPct((t.lastClose / t.ma - 1) * 100)}). 아래로 마감하면 전량 매도, 위로 올라오면 전량 매수.` : "200일선은 시세 200일치가 쌓이면 표시됩니다.");
     if (t.mode === "rebal") {
-      if (kMax < ZONES) guide.push(`종가가 ${fmt(level(t.ref, kMax + 1, s))} 아래로 마감하면 주식 10% 매도`);
-      if (kMax >= 2) guide.push(`종가가 ${fmt(level(t.ref, kMax - 2, s))} 이상이면 전량 매수 (V자 반등)`);
-      else if (kMax === 1) guide.push(`기준가 ${fmt(t.ref)} 회복 시 전량 매수`);
-      if (t.crisis && state.market && state.market.crisis && !(t.log || []).some((e) => /말뚝박기 진입/.test(e.signal || ""))) guide.push("시장은 위기 상태입니다. 이미 말뚝박기 중이면 수동 조정에서 모드를 바꾸세요.");
+      if (t.crisis) guide.push(`나스닥 ${state.settings.threshold}% 이하 마감이면 ${t.stake ? "말뚝박기 진입" : "전량 매도 후 한 달+1일 대기"}`);
+      if (t.rebal) {
+        if (kMax < zones) guide.push(`종가가 ${fmt(level(t.ref, kMax + 1, s))} 아래로 마감하면 주식 ${unit}% 매도`);
+        if (kMax >= cfg.rebuy) guide.push(`종가가 ${fmt(level(t.ref, kMax - cfg.rebuy, s))} 이상이면 전량 매수`);
+        else if (kMax >= 1) guide.push(`기준가 ${fmt(t.ref)} 회복 시 전량 매수`);
+      }
+    } else if (t.mode === "wait") {
+      guide.push(`대기 종료 ${m.waitUntil || "—"} 또는 나스닥 8거래일 연속 상승이면 전량 매수${t.ma200 ? " (200일선 위일 때만)" : ""}`);
     } else if (t.mode === "stake") {
-      const total = totalOf(t, t.lastClose);
-      const orders = [];
-      for (let i = kMax + 1; i <= Math.min(ZONES, kMax + 4); i++) { const lv = level(t.ref, i, s); const q = Math.floor(total * 0.1 / lv); orders.push(`<li>${fmt(lv)}에 ${q}주 (약 ${money(q * lv)}, 주식 ${i * UNIT}%)</li>`); }
+      const total2 = totalOf(t, t.lastClose); const orders = [];
+      for (let i = kMax + 1; i <= Math.min(ZONES, kMax + 4); i++) { const lv = level(t.ref, i, s); const q = Math.floor(total2 * 0.1 / lv); orders.push(`<li>${fmt(lv)}에 ${q}주 (약 ${money(q * lv)}, 주식 ${i * UNIT}%)</li>`); }
       if (orders.length) guide.push(`예약 매수 걸어둘 가격<ul class="orders">${orders.join("")}</ul>`);
       if (kMax >= 2) guide.push(`종가가 ${fmt(level(t.ref, kMax - 2, s))} 이상이면 남은 현금 전부 매수 (V자 반등)`);
-    } else {
-      guide.push(`종가가 ${fmt(level(t.ref, (t.vZone || 0) + 3, s))} 아래로 마감하면 전량 매도 후 말뚝박기`);
-    }
-    const exec = p ? `<div class="exec"><div><label for="ex-qty-${t.sym}">수량</label><input id="ex-qty-${t.sym}" type="number" step="1" value="${p.qty}"></div><div><label for="ex-price-${t.sym}">단가</label><input id="ex-price-${t.sym}" inputmode="decimal" value="${r2(p.price)}"></div><button type="button" class="btn sm" data-exec="${t.sym}">체결 완료</button></div>` : "";
-    const undoBtn = t.undo ? `<button type="button" class="link" data-undo="${t.sym}">마지막 반영 되돌리기</button>` : "";
+    } else guide.push(`종가가 ${fmt(level(t.ref, (t.vZone || 0) + 3, s))} 아래로 마감하면 전량 매도 후 말뚝박기`);
+    const exec = p ? `<div class="exec"><div><label for="ex-qty-${esc(t.sym)}">수량</label><input id="ex-qty-${esc(t.sym)}" type="number" step="1" value="${p.qty}"></div><div><label for="ex-price-${esc(t.sym)}">단가</label><input id="ex-price-${esc(t.sym)}" inputmode="decimal" value="${r2(p.price)}"></div><button type="button" class="btn sm" data-exec="${esc(t.sym)}">체결 완료</button></div>` : "";
+    const undoBtn = t.undo ? `<button type="button" class="link" data-undo="${esc(t.sym)}">마지막 반영 되돌리기</button>` : "";
+    const showRef = t.rebal || t.stake || stakeMode;
     status = `<div class="status" style="border-left-color:${dir === "up" ? "var(--up)" : dir === "down" ? "var(--down)" : "var(--ink)"}">
-      <div>${md(t.lastDate)} 종가 ${fmt(t.lastClose)}${t.mode === "stake" ? `, 저가 ${fmt(t.lastLow)}` : ""}, 기준가 ${fmt(t.ref)} 대비 <b>${fmtPct(dd)}</b>, ${zoneLabel(k, step)} 구간</div>
+      <div>${md(t.lastDate)} 종가 ${fmt(t.lastClose)}${stakeMode ? `, 저가 ${fmt(t.lastLow)}` : ""}${showRef ? `, 기준가 ${fmt(t.ref)} 대비 <b>${fmtPct(dd)}</b>, ${zoneLabel(k, step)} 구간` : ""}</div>
       <div class="act ${dir}">${t.signal && t.signal !== "시작" ? esc(t.signal) + ": " : "오늘 할 일: "}${esc(planText(p))}${!p && t.action && !/유지|확인/.test(t.action) ? ` <span class="dim" style="font-weight:400">(${esc(t.action)}, 반영 완료)</span>` : ""}</div>
       ${exec}${undoBtn}
       ${guide.map((g) => `<div class="guide">${g}</div>`).join("")}
     </div>`;
-  } else {
-    status = `<p class="empty">시세를 불러오면 최신 종가로 시작합니다. 기준가(전고점), 보유 수량, 현금은 수동 조정에서 맞춰 주세요.</p>`;
-  }
-  const table = t.ref ? renderTable(t, cfg) : "";
+  } else status = `<p class="empty">시세를 불러오면 최신 종가로 시작합니다. 보유 수량과 현금은 수동 조정에서 맞춰 주세요.</p>`;
+  const table = t.ref && (t.rebal || stakeMode) ? renderTable(t, cfg) : "";
   const log = (t.log || []).slice(0, 7).map((e) => {
-    const cls = /매수/.test(e.action || "") || /반등|갱신/.test(e.signal || "") ? "sig" : /매도/.test(e.action || "") ? "sigdown" : "";
+    const cls = /매수/.test(e.action || "") || /반등|갱신|회복/.test(e.signal || "") ? "sig" : /매도/.test(e.action || "") ? "sigdown" : "";
     return `<div><span>${md(e.date)}</span><span>${fmt(e.close)}</span><span>${modeLabel[e.mode] || ""}</span><span>주식 ${e.stock}%</span>${e.signal ? `<span class="${cls}">${esc(e.signal)}</span>` : ""}</div>`;
   }).join("");
   const ledger = (t.ledger || []).slice(0, 10).map((e) => `<div><span>${md(e.date)}</span><span class="${/매수/.test(e.type) ? "sig" : e.type === "매도" ? "sigdown" : ""}">${e.type}</span>${e.qty ? `<span>${e.qty}주 × ${fmt(e.price)}</span>` : ""}<span>${money(e.amount)}</span><span>→ ${e.shares}주, 현금 ${usd(e.cash)}</span></div>`).join("");
-  const modeSel = t.crisis ? `<div><label for="mode-${t.sym}">모드</label><select id="mode-${t.sym}">${Object.keys(modeLabel).map((m) => `<option value="${m}" ${t.mode === m ? "selected" : ""}>${modeLabel[m]}</option>`).join("")}</select></div>` : "";
-  const stepInfo = t.crisis ? `리밸런싱 ${t.stepRebal}%, 말뚝박기 ${stakeStepOf(t)}%` : `리밸런싱 ${t.stepRebal}%`;
+  const modes = ["rebal"].concat(t.crisis ? (t.stake ? ["stake", "vhold"] : ["wait"]) : []);
+  const modeSel = t.crisis ? `<div><label for="mode-${esc(t.sym)}">모드</label><select id="mode-${esc(t.sym)}">${modes.map((mo) => `<option value="${mo}" ${t.mode === mo ? "selected" : ""}>${modeLabel[mo]}</option>`).join("")}</select></div>` : "";
+  const sy = esc(t.sym);
   document.getElementById("panel").innerHTML = `<section class="panel">
-    <div class="head"><span class="sym">${esc(t.sym)}</span><span class="desc">${esc(t.desc)}, ${stepInfo}</span>${badge}</div>
+    <div class="head"><span class="sym">${sy}</span><span class="desc">${esc(t.desc)}</span>${badge}</div>
     <div class="body">
-      ${hold}${status}${table}
+      ${stratLine}${hold}${status}${table}
       ${log ? `<div class="log">${log}</div>` : ""}
       <details><summary>입금 · 추가 매수</summary>
         <div class="grid3">
-          <div style="grid-column:1/3"><label for="dep-${t.sym}">입금액 $ (출금은 음수)</label><input id="dep-${t.sym}" inputmode="decimal" placeholder="1000"></div>
-          <button type="button" class="btn sec sm" data-dep="${t.sym}" style="align-self:end">입금 반영</button>
-          <div><label for="xb-qty-${t.sym}">추가 매수 수량</label><input id="xb-qty-${t.sym}" type="number" step="1"></div>
-          <div><label for="xb-price-${t.sym}">체결 단가</label><input id="xb-price-${t.sym}" inputmode="decimal"></div>
-          <button type="button" class="btn sec sm" data-xb="${t.sym}" style="align-self:end">매수 반영</button>
+          <div style="grid-column:1/3"><label for="dep-${sy}">입금액 $ (출금은 음수)</label><input id="dep-${sy}" inputmode="decimal" placeholder="1000"></div>
+          <button type="button" class="btn sec sm" data-dep="${sy}" style="align-self:end">입금 반영</button>
+          <div><label for="xb-qty-${sy}">추가 매수 수량</label><input id="xb-qty-${sy}" type="number" step="1"></div>
+          <div><label for="xb-price-${sy}">체결 단가</label><input id="xb-price-${sy}" inputmode="decimal"></div>
+          <button type="button" class="btn sec sm" data-xb="${sy}" style="align-self:end">매수 반영</button>
         </div>
         <p class="note">입금은 이 종목 현금에 더해지고, 목표 비율에 맞춰 살 수량이 오늘 할 일에 뜹니다. 추가 매수는 밖의 돈으로 이미 산 것을 기록만 합니다.</p>
       </details>
       ${ledger ? `<details><summary>거래 원장</summary><div class="log" style="border:none;margin-top:4px">${ledger}</div></details>` : ""}
       <details><summary>가정 종가 시뮬레이션</summary>
         <div class="sim"><div class="grid3">
-          <div><label for="sim-close-${t.sym}">종가가</label><input id="sim-close-${t.sym}" inputmode="decimal" placeholder="${t.lastClose ? r2(t.lastClose) : ""}"></div>
-          <div><label for="sim-ndx-${t.sym}">나스닥 %</label><input id="sim-ndx-${t.sym}" inputmode="decimal" placeholder="0"></div>
-          <button type="button" class="btn sec sm" data-sim="${t.sym}" style="align-self:end">계산</button>
-        </div><div class="out" id="sim-out-${t.sym}">내일 이 종가로 마감하면 무엇을 해야 하는지 미리 봅니다. 저장되지 않습니다.</div></div>
+          <div><label for="sim-close-${sy}">종가가</label><input id="sim-close-${sy}" inputmode="decimal" placeholder="${t.lastClose ? r2(t.lastClose) : ""}"></div>
+          <div><label for="sim-ndx-${sy}">나스닥 %</label><input id="sim-ndx-${sy}" inputmode="decimal" placeholder="0"></div>
+          <button type="button" class="btn sec sm" data-sim="${sy}" style="align-self:end">계산</button>
+        </div><div class="out" id="sim-out-${sy}">내일 이 종가로 마감하면 무엇을 해야 하는지 미리 봅니다. 저장되지 않습니다.</div></div>
       </details>
       <details><summary>수동 조정</summary>
         <div class="grid">
-          <div><label for="ref-${t.sym}">기준가 (전고점)</label><input id="ref-${t.sym}" inputmode="decimal" value="${t.ref == null ? "" : t.ref}"></div>
-          <div><label for="stock-${t.sym}">현재 주식 비율 %</label><input id="stock-${t.sym}" type="number" step="10" min="0" max="100" value="${t.stock == null ? 100 : t.stock}"></div>
-          <div><label for="shares-${t.sym}">보유 수량 (주)</label><input id="shares-${t.sym}" type="number" step="1" value="${t.shares || 0}"></div>
-          <div><label for="cash-${t.sym}">이 종목 현금 $</label><input id="cash-${t.sym}" inputmode="decimal" value="${r2(t.cash || 0)}"></div>
-          <div><label for="avg-${t.sym}">평균 단가 $ (선택)</label><input id="avg-${t.sym}" inputmode="decimal" value="${t.avgCost ? r2(t.avgCost) : ""}"></div>
+          <div><label for="ref-${sy}">기준가 (전고점)</label><input id="ref-${sy}" inputmode="decimal" value="${t.ref == null ? "" : t.ref}"></div>
+          <div><label for="stock-${sy}">현재 주식 비율 %</label><input id="stock-${sy}" type="number" step="10" min="0" max="100" value="${t.stock == null ? 100 : t.stock}"></div>
+          <div><label for="shares-${sy}">보유 수량 (주)</label><input id="shares-${sy}" type="number" step="1" value="${t.shares || 0}"></div>
+          <div><label for="cash-${sy}">이 종목 현금 $</label><input id="cash-${sy}" inputmode="decimal" value="${r2(t.cash || 0)}"></div>
+          <div><label for="avg-${sy}">평균 단가 $ (선택)</label><input id="avg-${sy}" inputmode="decimal" value="${t.avgCost ? r2(t.avgCost) : ""}"></div>
           ${modeSel}
         </div>
         <div class="row" style="margin-top:10px;justify-content:space-between">
-          <button type="button" class="btn sec" data-save="${t.sym}">저장</button>
-          <button type="button" class="link" data-high="${t.sym}">1년 최고 종가로 기준가</button>
-          <button type="button" class="link" data-reset="${t.sym}">매뉴얼 기록 지우기</button>
+          <button type="button" class="btn sec" data-save="${sy}">저장</button>
+          <button type="button" class="link" data-high="${sy}">1년 최고 종가로 기준가</button>
+          <button type="button" class="link" data-reset="${sy}">매뉴얼 기록 지우기</button>
         </div>
       </details>
     </div>
@@ -779,22 +847,25 @@ function renderSettingsInputs() {
   document.getElementById("apiKey").value = s.apiKey;
   document.getElementById("ndx").value = s.ndx;
   document.getElementById("threshold").value = s.threshold;
-  document.getElementById("stepsTable").innerHTML = `<thead><tr><th>종목</th><th>리밸런싱</th><th>말뚝 제로금리</th><th>말뚝 금리인상기</th><th></th></tr></thead><tbody>` +
-    state.order.map((sym) => {
-      const t = state.tickers[sym];
-      const inp = (f) => `<td><input type="number" step="0.5" min="1" max="15" id="st-${sym}-${f}" value="${t[f]}"></td>`;
-      return `<tr><td>${esc(sym)}</td>${inp("stepRebal")}${t.crisis ? inp("stepStakeZero") + inp("stepStakeHike") : "<td>—</td><td>—</td>"}<td><button type="button" class="link" data-del="${sym}">삭제</button></td></tr>`;
-    }).join("") + `</tbody>`;
+  document.getElementById("cfgList").innerHTML = state.order.map((sym) => {
+    const t = state.tickers[sym]; const sy = esc(sym);
+    const chk = (f, label) => `<label class="chk"><input type="checkbox" id="cf-${sy}-${f}" ${t[f] ? "checked" : ""}> ${label}</label>`;
+    const num = (f, label) => `<div><label for="cf-${sy}-${f}">${label}</label><input type="number" step="0.5" min="0.5" id="cf-${sy}-${f}" value="${t[f]}"></div>`;
+    return `<div class="cfg"><div class="name"><span>${sy} <span class="dim" style="font-weight:400">${esc(t.feed || sym)}</span></span><button type="button" class="link" data-del="${sy}">삭제</button></div>
+      <div class="toggles">${chk("crisis", "−3% 위기")}${chk("stake", "말뚝박기")}${chk("ma200", "200일선")}${chk("rebal", "리밸런싱")}</div>
+      <div class="nums">${num("stepRebal", "리밸 간격%")}${num("unit", "매도단위%")}${num("rebuy", "재매수구간")}${num("stepStakeZero", "말뚝 제로%")}${num("stepStakeHike", "말뚝 인상%")}</div></div>`;
+  }).join("");
+  document.getElementById("add-preset").innerHTML = Object.keys(PRESETS).map((id) => `<option value="${id}">${PRESETS[id].name}</option>`).join("");
 }
 function renderRules() {
   const s = state.settings;
   document.getElementById("rules").innerHTML = `<ul>
-    <li>평시(리밸런싱): 기준가에서 종목별 간격만큼 떨어질 때마다 종가 기준 주식 ${UNIT}% 매도. 이미 판 구간은 다시 팔지 않고, 최저 구간에서 2구간 위로 종가가 올라오면 전량 매수(그 구간 가격이 새 기준가). 종가가 기준가를 넘으면 기준가 갱신.</li>
-    <li>위기 진입: 나스닥(${esc(s.ndx)}) 종가 ${s.threshold}% 이하이면 위기 모드 종목은 그 구간의 말뚝박기 주식 비율로 맞추고(기준가 구간이면 전량 매도), 아래 구간마다 ${UNIT}% 예약 매수. 간격은 종목별 설정의 금리 국면 값을 씁니다.</li>
-    <li>말뚝박기 중: 장중 저가가 구간 가격에 닿으면 체결 처리. 최저 구간에서 2구간 위로 종가 회복 시 남은 현금 전부 매수(V반등 보유). 거기서 3구간 다시 떨어지면 전량 매도 후 말뚝박기 재진입(그 구간 가격이 새 사다리 기준).</li>
-    <li>위기 종료: 마지막 −3% 발생일 + 달력 한 달 + 1일(한 달 안 4회면 두 달 + 1일)이 지나거나 나스닥이 8거래일 연속 상승하면 전량 매수하고 리밸런싱으로 복귀. 새 −3%가 뜨면 대기가 다시 시작.</li>
-    <li>수량: 비율이 바뀐 날 총자산(주식 평가 + 현금) × 목표 주식 비율 ÷ 종가로 목표 수량을 정하고, 목표와 보유의 차이를 오늘 할 일로 보여줍니다. 체결 완료를 누르기 전까지는 다음 날에도 그대로 남습니다. 말뚝은 총자산의 10%씩 그 구간 가격으로 계산. 매수는 현금 잔고를 넘지 않게 내림.</li>
-    <li>미국 장중에 열면 확정 전 봉은 반영하지 않습니다. 확정 종가는 한국 시간 새벽 5~6시 이후 반영됩니다.</li>
+    <li><b>−3% 대기</b>: 나스닥(${esc(s.ndx)}) 종가 ${s.threshold}% 이하이면 전량 매도. 마지막 −3% 발생일 + 달력 한 달 + 1일(한 달 안 4회면 두 달 + 1일)이 지나거나 8거래일 연속 상승하면 전량 매수. 새 −3%가 뜨면 대기 재시작. 책 매뉴얼 1에 해당하며 백테스트에서 힘의 대부분이 여기서 나왔습니다.</li>
+    <li><b>200일선</b>: 최근 200거래일 종가 평균. 종가가 아래로 마감하면 전량 매도, 위로 올라오면 전량 매수. −3% 대기와 같이 쓰면 대기 종료 후에도 200일선 위일 때만 삽니다. 느린 하락장(2008, 2022)에 강하고 급락엔 늦습니다.</li>
+    <li><b>리밸런싱</b>: 기준가(전고점)에서 간격만큼 떨어질 때마다 매도 단위만큼 종가 기준 매도. 이미 판 구간은 다시 팔지 않고, 최저 구간에서 재매수 구간만큼 위로 종가가 올라오면 전량 매수(그 가격이 새 기준가). 종가가 기준가를 넘으면 기준가 갱신. 20% 단위가 브레이크 역할, 10% 단위는 수익만 깎았습니다.</li>
+    <li><b>말뚝박기</b>: −3% 진입 시 그 구간의 주식 비율만 남기고 아래 구간마다 10% 예약 매수(장중 저가 기준). 2구간 위로 종가 회복 시 남은 현금 전부 매수, 거기서 3구간 다시 떨어지면 전량 매도 후 재진입. 2020년식 V자엔 좋지만 2000·2008·2022식 긴 하락에 취약해 기본 전략에서 뺐습니다.</li>
+    <li><b>수량</b>: 비율이 바뀐 날 총자산(주식 평가 + 현금) × 목표 주식 비율 ÷ 종가로 목표 수량을 정하고, 목표와 보유의 차이를 오늘 할 일로 보여줍니다. 체결 완료를 누르기 전까지는 다음 날에도 그대로 남습니다.</li>
+    <li>미국 장중에 열면 확정 전 봉은 반영하지 않습니다. 비트코인은 UTC 기준 전날까지의 확정 봉만 씁니다. 세금·수수료는 계산에 없습니다.</li>
   </ul>`;
 }
 function render() {
@@ -807,22 +878,20 @@ function render() {
 
 // ---------- 이벤트 ----------
 document.getElementById("refresh").addEventListener("click", refresh);
-document.getElementById("regime").addEventListener("click", (e) => {
-  const b = e.target.closest("button[data-r]");
-  if (!b) return;
-  state.settings.regime = b.dataset.r; save(); render();
-});
+document.getElementById("regime").addEventListener("click", (e) => { const b = e.target.closest("button[data-r]"); if (!b) return; state.settings.regime = b.dataset.r; save(); render(); });
 document.getElementById("saveSettings").addEventListener("click", () => {
   const s = state.settings;
-  const numOr = (id, prev) => { const el = document.getElementById(id); const v = el ? parseFloat(el.value) : NaN; return Number.isFinite(v) && v > 0 ? v : prev; };
   s.apiKey = document.getElementById("apiKey").value.trim();
   s.ndx = (document.getElementById("ndx").value.trim() || "ONEQ").toUpperCase();
   const th = parseFloat(document.getElementById("threshold").value); if (Number.isFinite(th)) s.threshold = th;
   for (const sym of state.order) {
     const t = state.tickers[sym];
-    t.stepRebal = numOr(`st-${sym}-stepRebal`, t.stepRebal);
-    t.stepStakeZero = numOr(`st-${sym}-stepStakeZero`, t.stepStakeZero);
-    t.stepStakeHike = numOr(`st-${sym}-stepStakeHike`, t.stepStakeHike);
+    for (const f of ["crisis", "stake", "ma200", "rebal"]) { const el = document.getElementById(`cf-${sym}-${f}`); if (el) t[f] = el.checked; }
+    for (const f of ["stepRebal", "unit", "rebuy", "stepStakeZero", "stepStakeHike"]) { const el = document.getElementById(`cf-${sym}-${f}`); const v = el ? parseFloat(el.value) : NaN; if (Number.isFinite(v) && v > 0) t[f] = f === "rebuy" ? Math.round(v) : v; }
+    if (t.unit > 100) t.unit = 100;
+    t.strategy = presetMatch(t);
+    if ((t.mode === "stake" || t.mode === "vhold") && !t.stake) t.mode = "wait";
+    if (t.mode === "wait" && !t.crisis) t.mode = "rebal";
   }
   save(); renderSettingsInputs(); render();
   showMsg("설정을 저장했습니다.");
@@ -830,23 +899,19 @@ document.getElementById("saveSettings").addEventListener("click", () => {
 });
 document.getElementById("addTicker").addEventListener("click", () => {
   const sym = document.getElementById("add-sym").value.trim().toUpperCase();
-  if (!/^[A-Z0-9.\-]{1,10}$/.test(sym)) { showMsg("심볼을 확인하세요 (예: SOXL).", "err"); return; }
+  if (!/^[A-Z0-9.\-]{1,10}$/.test(sym)) { showMsg("종목 이름을 확인하세요 (예: QLD).", "err"); return; }
   if (state.tickers[sym]) { showMsg(sym + "은 이미 있습니다.", "err"); return; }
-  const num = (id, d) => { const v = parseFloat(document.getElementById(id).value); return Number.isFinite(v) && v > 0 ? v : d; };
-  state.tickers[sym] = newTicker(sym, { desc: document.getElementById("add-desc").value.trim() || sym, crisis: document.getElementById("add-crisis").checked, stepRebal: num("add-r", 5), stepStakeZero: num("add-z", 5), stepStakeHike: num("add-h", 7.5) });
+  const feed = (document.getElementById("add-feed").value.trim() || sym).toUpperCase();
+  state.tickers[sym] = newTicker(sym, { desc: document.getElementById("add-desc").value.trim() || sym, feed, preset: document.getElementById("add-preset").value });
   state.order.push(sym); state.tab = sym;
   save(); renderSettingsInputs(); render();
   showMsg(`${sym} 추가했습니다. 새로고침하면 시세를 받아옵니다.`);
 });
-document.getElementById("exportBtn").addEventListener("click", () => {
-  document.getElementById("backup").value = JSON.stringify({ app: "rebal", version: 3, savedAt: new Date().toISOString(), state });
-  showMsg("내보냈습니다. 복사해서 메모 앱 등에 보관하세요.");
-});
+document.getElementById("exportBtn").addEventListener("click", () => { document.getElementById("backup").value = JSON.stringify({ app: "rebal", version: 4, savedAt: new Date().toISOString(), state }); showMsg("내보냈습니다. 복사해서 메모 앱 등에 보관하세요."); });
 document.getElementById("copyBtn").addEventListener("click", async () => {
   const ta = document.getElementById("backup");
-  if (!ta.value) ta.value = JSON.stringify({ app: "rebal", version: 3, savedAt: new Date().toISOString(), state });
-  try { await navigator.clipboard.writeText(ta.value); showMsg("복사했습니다."); }
-  catch (e) { ta.focus(); ta.select(); showMsg("길게 눌러 직접 복사해 주세요."); }
+  if (!ta.value) ta.value = JSON.stringify({ app: "rebal", version: 4, savedAt: new Date().toISOString(), state });
+  try { await navigator.clipboard.writeText(ta.value); showMsg("복사했습니다."); } catch (e) { ta.focus(); ta.select(); showMsg("길게 눌러 직접 복사해 주세요."); }
 });
 document.getElementById("importBtn").addEventListener("click", () => {
   try {
@@ -854,15 +919,12 @@ document.getElementById("importBtn").addEventListener("click", () => {
     const src = j && j.state ? j.state : j;
     if (!src || !src.tickers) throw new Error("형식이 맞지 않습니다.");
     if (!window.confirm("지금 저장된 내용을 붙여넣은 내용으로 바꿉니다. 계속할까요?")) return;
-    state = hydrate(src); save(); renderSettingsInputs(); render();
+    state = hydrate(src, !(j && j.version >= 4)); save(); renderSettingsInputs(); render();
     showMsg("복원했습니다. 새로고침으로 시세를 받아오세요.");
   } catch (e) { showMsg("복원 실패: " + e.message, "err"); }
 });
-document.getElementById("wipe").addEventListener("click", () => {
-  if (!window.confirm("설정과 기록을 모두 지울까요?")) return;
-  store.del(KEY_STATE); store.del(KEY_DATA); OLD_KEYS.forEach(store.del);
-  location.reload();
-});
+document.getElementById("wipe").addEventListener("click", () => { if (!window.confirm("설정과 기록을 모두 지울까요?")) return; store.del(KEY_STATE); store.del(KEY_DATA); OLD_KEYS.forEach(store.del); location.reload(); });
+document.addEventListener("change", (e) => { const sel = e.target.closest("select[data-strategy]"); if (sel) changeStrategy(sel.dataset.strategy, sel.value); });
 document.addEventListener("click", (e) => {
   const tab = e.target.closest("[data-tab]");
   if (tab) { state.tab = tab.dataset.tab; save(); renderTabs(); renderPanel(); const tabs = document.getElementById("tabs"); if (tab.classList.contains("sumrow") && tabs.scrollIntoView) tabs.scrollIntoView({ block: "start", behavior: "smooth" }); return; }

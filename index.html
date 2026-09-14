@@ -369,7 +369,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch (e) {} },
 };
-const T_FIELDS = ["desc", "feed", "currency", "strategy"].concat(CFG_FIELDS, ["mode", "ref", "kMax", "stock", "vZone", "belowMA", "ma", "lastDate", "lastClose", "lastLow", "prevClose", "signal", "action", "log", "shares", "cash", "targetShares", "planPrice", "avgCost", "realized", "ledger", "undo"]);
+const T_FIELDS = ["desc", "feed", "currency", "convApplied", "strategy"].concat(CFG_FIELDS, ["mode", "ref", "kMax", "stock", "vZone", "belowMA", "ma", "lastDate", "lastClose", "lastLow", "prevClose", "signal", "action", "log", "shares", "cash", "targetShares", "planPrice", "avgCost", "realized", "ledger", "undo"]);
 function newTicker(sym, def) {
   const t = Object.assign({ sym, desc: sym, feed: sym, currency: "USD" }, def || {}, {
     mode: "rebal", ref: null, kMax: 0, stock: 100, vZone: null, belowMA: null, ma: null, lastDate: null, lastClose: null, lastLow: null, prevClose: null, signal: "", action: "", log: [],
@@ -423,6 +423,24 @@ const toUSD = (t, v) => { if (!isKRW(t)) return v || 0; const r = fxRate(); retu
 const feedIsKRW = (t) => /\/KRW$/i.test(t.feed || "");
 // 달러로 받은 시세를 원화 표시 종목에 쓸 때 곱할 환율 (이미 원화 시세면 1)
 const convOf = (t) => (isKRW(t) && !feedIsKRW(t)) ? (fxRate() || 0) : 1;
+// 표시 통화나 환율이 바뀌면 저장해 둔 가격들을 새 기준으로 되맞춘다
+function rescale(t, conv) {
+  const old = Number.isFinite(t.convApplied) && t.convApplied > 0 ? t.convApplied : 1;
+  if (!conv || Math.abs(conv / old - 1) < 0.0005) { t.convApplied = conv || old; return false; }
+  const k = conv / old;
+  const switched = (old === 1) !== (conv === 1);   // 달러 ↔ 원화 전환
+  for (const f of ["ref", "lastClose", "lastLow", "prevClose", "ma", "planPrice"]) if (Number.isFinite(t[f])) t[f] = r2(t[f] * k);
+  (t.log || []).forEach((e) => { if (Number.isFinite(e.close)) e.close = r2(e.close * k); if (Number.isFinite(e.low)) e.low = r2(e.low * k); if (Number.isFinite(e.ref)) e.ref = r2(e.ref * k); });
+  if (switched) {
+    if (Number.isFinite(t.avgCost)) t.avgCost = r2(t.avgCost * k);
+    if (Number.isFinite(t.cash)) t.cash = r2(t.cash * k);
+    (t.ledger || []).forEach((e) => { ["price", "amount", "cash"].forEach((f) => { if (Number.isFinite(e[f])) e[f] = r2(e[f] * k); }); });
+    const y = todayLocal().slice(0, 4);
+    if (t.realized) for (const yy of Object.keys(t.realized)) t.realized[yy] = r2(t.realized[yy] * k);
+  }
+  t.convApplied = conv;
+  return switched;
+}
 const wonFmt = (n) => n == null || !Number.isFinite(n) ? "—" : (n < 0 ? "−" : "") + "₩" + Math.round(Math.abs(n)).toLocaleString("ko-KR");
 // 종목 통화로 금액 표시 (원화 종목은 원화, 달러 종목은 달러+원화 병기)
 const cMoney = (t, v) => isKRW(t) ? wonFmt(v) : money(v);
@@ -705,13 +723,22 @@ function applyData() {
   if (!market) throw new Error("나스닥 대용 심볼 데이터가 없습니다.");
   const fx0 = data.bars[FX];
   if (fx0 && fx0.length) state.fx = { rate: fx0[fx0.length - 1].close, date: fx0[fx0.length - 1].date };
-  const noFx = [];
+  const noFx = [], switched = [];
   for (const sym of state.order) {
     const t = state.tickers[sym];
     const conv = convOf(t);
     if (!conv) { noFx.push(sym); continue; }
     let bars = completeBars(t, liveDate);
     if (conv !== 1) bars = bars.map((b) => ({ date: b.date, close: b.close * conv, low: b.low * conv }));
+    // 저장된 값이 어떤 기준으로 쓰였는지 모르면, 같은 날 종가와 비교해 추정한다
+    if (!Number.isFinite(t.convApplied) && Number.isFinite(t.lastClose) && t.lastClose > 0) {
+      const same = bars.find((b) => b.date === t.lastDate) || bars[bars.length - 1];
+      t.convApplied = same && same.close > 0 ? conv * (t.lastClose / same.close) : conv;
+      const ratio = t.convApplied / conv;
+      if (ratio > 0.5 && ratio < 2) t.convApplied = conv;   // 같은 단위면 그대로 둔다
+      else t.convApplied = t.convApplied > conv / 2 ? conv : 1;
+    }
+    if (rescale(t, conv)) switched.push(sym);
     if (!bars.length) continue;
     const mas = maSeries(bars, 200);
     const prevBar = bars.length > 1 ? bars[bars.length - 2] : null;
@@ -741,6 +768,7 @@ function applyData() {
   const cb = (data.bars[CASH_SYM] || []).filter((b) => b.date !== liveDate);
   if (cb.length) { state.cash.lastClose = cb[cb.length - 1].close; state.cash.prevClose = cb.length > 1 ? cb[cb.length - 2].close : null; }
   save();
+  if (switched.length) showMsg(`${switched.join(", ")}의 표시 통화가 바뀌어 기준가·평단·현금을 환율로 환산했습니다. 수동 조정에서 값이 맞는지 확인하세요.`, "warn");
   if (noFx.length) throw new Error(`${noFx.join(", ")}는 환율이 있어야 원화로 표시할 수 있습니다. 새로고침을 다시 시도하세요.`);
 }
 async function refresh() {
@@ -1191,7 +1219,7 @@ document.getElementById("saveSettings").addEventListener("click", () => {
     for (const f of ["crisis", "stake", "ma200", "rebal"]) { const el = document.getElementById(`cf-${sym}-${f}`); if (el) t[f] = el.checked; }
     for (const f of ["stepRebal", "unit", "rebuy", "stepStakeZero", "stepStakeHike"]) { const el = document.getElementById(`cf-${sym}-${f}`); const v = el ? parseFloat(el.value) : NaN; if (Number.isFinite(v) && v > 0) t[f] = f === "rebuy" ? Math.round(v) : v; }
     const fe = document.getElementById(`cf-${sym}-feed`); if (fe && fe.value.trim()) t.feed = fe.value.trim().toUpperCase();
-    const cu = document.getElementById(`cf-${sym}-cur`); if (cu) t.currency = cu.value;
+    const cu = document.getElementById(`cf-${sym}-cur`); if (cu && cu.value !== (t.currency || "USD")) { t.currency = cu.value; const cv = convOf(t); if (cv) rescale(t, cv); }
     if (t.unit > 100) t.unit = 100;
     t.strategy = presetMatch(t);
     if ((t.mode === "stake" || t.mode === "vhold") && !t.stake) t.mode = "wait";

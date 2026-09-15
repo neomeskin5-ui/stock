@@ -595,38 +595,41 @@ function cashSubmit() {
   const src = document.getElementById("cs-src").value;
   const qty = Math.max(0, Math.round(parseFloat(document.getElementById("cs-qty").value)));
   const price = parseFloat(document.getElementById("cs-price").value);
-  const c = state.cash, t = state.tickers[src];
+  const c = state.cash, ext = src === "__ext", t = ext ? null : state.tickers[src];
   if (!qty || !Number.isFinite(price) || price <= 0) { showMsg("수량과 단가를 넣어주세요.", "err"); return; }
-  if (!t || isKRW(t)) { showMsg("달러 현금을 쓰는 종목을 출처로 고르세요.", "err"); return; }
-  const amt = qty * price;
-  if (side === "매수" && amt > (t.cash || 0) + 0.005) { showMsg(`${src} 몫 현금이 ${usd(t.cash || 0)}뿐입니다. 먼저 매도하거나 다른 종목 몫을 쓰세요.`, "err"); return; }
+  if (!ext && !t) { showMsg("현금 출처를 고르세요.", "err"); return; }
+  if (!ext && isKRW(t) && !fxRate()) { showMsg("환율을 아직 못 받았습니다. 새로고침 후 다시 시도하세요.", "err"); return; }
+  const amt = qty * price;                                   // 달러
+  const local = ext ? amt : (isKRW(t) ? amt * fxRate() : amt); // 출처 통화 금액
+  if (!ext && side === "매수" && local > (t.cash || 0) + 0.005) { showMsg(`${src} 몫 현금이 ${cAmt(t, t.cash || 0)}뿐입니다. 먼저 매도하거나 다른 출처를 고르세요.`, "err"); return; }
   if (side === "매도" && qty > (c.shares || 0)) { showMsg(`보유 ${c.shares || 0}주보다 많습니다.`, "err"); return; }
   markUndo(`${CASH_SYM} ${qty}주 ${side}`);
   if (side === "매수") {
     const old = c.shares || 0;
     c.avgCost = old + qty > 0 ? ((c.avgCost || 0) * old + amt) / (old + qty) : 0;
-    c.shares = old + qty; t.cash = r2((t.cash || 0) - amt);
+    c.shares = old + qty; if (t) t.cash = r2((t.cash || 0) - local);
   } else {
     const y = todayLocal().slice(0, 4);
     c.realized = c.realized || {}; c.realized[y] = r2((c.realized[y] || 0) + (price - (c.avgCost || 0)) * qty);
-    c.shares -= qty; t.cash = r2((t.cash || 0) + amt);
+    c.shares -= qty; if (t) t.cash = r2((t.cash || 0) + local);
   }
-  c.ledger = [{ date: todayLocal(), type: side, qty, price, amount: r2(amt), shares: c.shares, src }].concat(c.ledger || []).slice(0, 200);
-  setTarget(t, t.stock, t.lastClose);
+  c.ledger = [{ date: todayLocal(), type: side, qty, price, amount: r2(amt), shares: c.shares, src: ext ? "외부" : src }].concat(c.ledger || []).slice(0, 200);
+  if (t) setTarget(t, t.stock, t.lastClose);
   save(); render();
-  showMsg(`${CASH_SYM} ${qty}주 ${side}, ${src} 몫 현금 ${side === "매수" ? "−" : "+"}${usd(amt)} 반영했습니다.`);
+  showMsg(`${CASH_SYM} ${qty}주 ${side}, ${ext ? "외부 현금" : `${src} 몫 ${side === "매수" ? "−" : "+"}${cAmt(t, local)}`} 반영했습니다.${!ext && isKRW(t) ? " (환전 필요)" : ""}`);
 }
 function cashIncome() {
   const dst = document.getElementById("cs-dst").value;
   const amt = parseFloat(document.getElementById("cs-inc").value);
-  const t = state.tickers[dst];
-  if (!Number.isFinite(amt) || amt === 0 || !t) { showMsg("금액을 넣어주세요.", "err"); return; }
+  const ext = dst === "__ext", t = ext ? null : state.tickers[dst];
+  if (!Number.isFinite(amt) || amt === 0 || (!ext && !t)) { showMsg("금액과 넣을 곳을 확인하세요.", "err"); return; }
+  if (!ext && isKRW(t) && !fxRate()) { showMsg("환율을 아직 못 받았습니다. 새로고침 후 다시 시도하세요.", "err"); return; }
   markUndo(`${CASH_SYM} 분배금`);
-  t.cash = r2((t.cash || 0) + amt);
-  state.cash.ledger = [{ date: todayLocal(), type: amt > 0 ? "분배금" : "출금", qty: 0, price: 0, amount: r2(amt), shares: state.cash.shares, src: dst }].concat(state.cash.ledger || []).slice(0, 200);
-  setTarget(t, t.stock, t.lastClose);
+  if (t) t.cash = r2((t.cash || 0) + (isKRW(t) ? amt * fxRate() : amt));
+  state.cash.ledger = [{ date: todayLocal(), type: amt > 0 ? "분배금" : "출금", qty: 0, price: 0, amount: r2(amt), shares: state.cash.shares, src: ext ? "외부" : dst }].concat(state.cash.ledger || []).slice(0, 200);
+  if (t) setTarget(t, t.stock, t.lastClose);
   save(); render();
-  showMsg(`${CASH_SYM} 분배금 ${usd(amt)}를 ${dst} 몫으로 넣었습니다.`);
+  showMsg(`${CASH_SYM} 분배금 ${usd(amt)}를 ${ext ? "외부 현금으로 뺐습니다" : `${dst} 몫으로 넣었습니다`}.`);
 }
 // 계획 체결
 function execute(sym) {
@@ -1020,15 +1023,14 @@ function renderCashPanel() {
   const val = sgovValue();
   const pnl = c.avgCost && px ? (px - c.avgCost) * (c.shares || 0) : null;
   const y = todayLocal().slice(0, 4), real = c.realized && c.realized[y];
-  const usdSyms = state.order.filter((x) => !isKRW(state.tickers[x]));
-  const opts = usdSyms.map((x) => `<option value="${esc(x)}" ${(state.tickers[x].cash || 0) > 0 ? "" : ""}>${esc(x)} (몫 ${usd(state.tickers[x].cash || 0)})</option>`).join("");
+  const opts = state.order.map((x) => { const t = state.tickers[x]; return `<option value="${esc(x)}">${esc(x)} (몫 ${cAmt(t, t.cash || 0)}${isKRW(t) ? ` ≈ ${usd(toUSD(t, t.cash || 0))}` : ""})</option>`; }).join("") + `<option value="__ext">외부 현금 (계좌 밖 돈)</option>`;
   const buy = buyableSgov();
   const ledger = (c.ledger || []).slice(0, 10).map((e) => `<div><span>${md(e.date)}</span><span class="${e.type === "매수" ? "sig" : e.type === "매도" ? "sigdown" : ""}">${esc(e.type)}</span>${e.qty ? `<span>${e.qty}주 × ${fmt(e.price)}</span>` : ""}<span>${usd(e.amount)}</span><span>→ ${e.shares}주${e.src ? `, ${esc(e.src)} 몫` : ""}</span></div>`).join("");
   const rows = state.order.map((sym) => { const t = state.tickers[sym]; return `<tr><td>${esc(sym)}</td><td>${cAmt(t, t.cash || 0)}</td></tr>`; }).join("");
   document.getElementById("panel").innerHTML = `<section class="panel">
     <div class="head"><span class="sym">${CASH_SYM}</span><span class="desc">초단기 미국채 ETF, 현금 대용</span><span class="badge">현금</span></div>
     <div class="body">
-      <p class="rule">매매 규칙은 적용하지 않습니다. 살 때는 어느 종목 몫 현금을 쓸지 고르고, 팔면 그 종목 몫으로 돌아갑니다.</p>
+      <p class="rule">매매 규칙은 적용하지 않습니다. 살 때 쓴 돈이 어디서 왔는지 고르면(종목 몫 또는 외부 현금) 그만큼 빠지고, 팔면 그쪽으로 돌아갑니다. 원화 종목을 고르면 환율로 환산해 원화 몫에서 오갑니다.</p>
       <div class="hold">보유 <b>${(c.shares || 0).toLocaleString("en-US")}주</b>${px ? ` × ${fmt(px)} = ${money(val)}` : ""}${c.avgCost ? `<br>평단 ${fmt(c.avgCost)}${pnl != null ? `, 평가손익 ${pnl >= 0 ? "+" : ""}${usd(pnl)}` : ""}` : ""}${real ? `, 올해 실현 ${real >= 0 ? "+" : ""}${usd(real)}` : ""}<br>예수금(아직 ${CASH_SYM}로 안 옮긴 달러) <b>${usd(freeCash())}</b></div>
       ${buy > 0 ? `<div class="status">예수금으로 <b>${CASH_SYM} ${buy.toLocaleString("en-US")}주</b>를 살 수 있습니다.</div>` : ""}
       <div class="trade" style="grid-template-columns:1fr 1fr 1fr 1fr auto">
@@ -1044,7 +1046,7 @@ function renderCashPanel() {
           <div><label for="cs-dst">넣을 종목 몫</label><select id="cs-dst">${opts}</select></div>
           <button type="button" class="btn sec sm" id="cashIncome" style="align-self:end">반영</button>
         </div>
-        <p class="note">${CASH_SYM} 분배금은 매달 첫 영업일이 배당락이고 며칠 뒤 현금으로 들어옵니다. 들어온 금액을 여기에 기록하세요.</p>
+        <p class="note">${CASH_SYM} 분배금은 매달 첫 영업일이 배당락이고 며칠 뒤 현금으로 들어옵니다. 들어온 금액을 어느 종목 몫으로 넣을지 고르세요. 계좌 밖으로 뺄 거면 외부 현금을 고르면 됩니다.</p>
       </details>
       <details><summary>종목별 몫 현금</summary>
         <table><thead><tr><th>종목</th><th>몫</th></tr></thead><tbody>${rows}<tr><td><b>달러 합계</b></td><td><b>${usd(freeCash())}</b></td></tr></tbody></table>

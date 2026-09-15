@@ -375,7 +375,7 @@ function presetMatch(t) {
 const KEY_STATE = "rebal-web-v5", KEY_DATA = "rebal-data-v5", OLD_KEYS = ["rebal-web-v4", "rebal-web-v3", "rebal-web-v2", "rebal2x-web-v1"];
 const CASH_SYM = "SGOV";
 const COLORS = ["#2F6FD6", "#D93A3A", "#E8A33D", "#3F9E6A", "#8A5FD0", "#2FA8B8"];
-const newCash = () => ({ sym: CASH_SYM, feed: CASH_SYM, lastClose: null });  // 시세만 쓴다 (현금을 몇 주로 환산할지)
+const newCash = () => ({ sym: CASH_SYM, feed: CASH_SYM, currency: "USD", shares: 0, avgCost: 0, lastClose: null, prevClose: null, realized: {}, ledger: [] });
 const FX = "USD/KRW";
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
@@ -412,16 +412,12 @@ function hydrate(raw, migrating) {
     if (!t.strategy) t.strategy = presetMatch(t);
     tickers[sym] = t;
   }
-  const cash = { sym: CASH_SYM, feed: CASH_SYM, lastClose: (s.cash && s.cash.lastClose) || null };
-  // 예전 구조(SGOV 보유 + 미투자 현금)를 종목별 몫으로 합친다
-  if (s.cash && (s.cash.shares || s.cashFree)) {
-    const phys = r2((s.cash.shares || 0) * (s.cash.lastClose || 0) + (s.cashFree || 0));
+  const cash = Object.assign(newCash(), s.cash || {});
+  cash.sym = CASH_SYM; cash.feed = CASH_SYM; cash.currency = "USD";
+  // 예전 구조의 미투자 현금은 종목 몫으로 흡수한다
+  if (Number.isFinite(s.cashFree) && Math.abs(s.cashFree) >= 0.01) {
     const usdSyms = order.filter((x) => (tickers[x].currency || "USD") !== "KRW");
-    if (usdSyms.length && Math.abs(phys) >= 0.01) {
-      const book = usdSyms.reduce((a, x) => a + (tickers[x].cash || 0), 0);
-      if (book > 0) for (const x of usdSyms) tickers[x].cash = r2((tickers[x].cash || 0) + phys * (tickers[x].cash || 0) / book);
-      else { const each = r2(phys / usdSyms.length); for (const x of usdSyms) tickers[x].cash = r2((tickers[x].cash || 0) + each); }
-    }
+    if (usdSyms.length) { const each = r2(s.cashFree / usdSyms.length); for (const x of usdSyms) tickers[x].cash = r2((tickers[x].cash || 0) + each); }
   }
   const targets = {}; for (const sym of order) targets[sym] = (s.targets && Number.isFinite(s.targets[sym])) ? s.targets[sym] : 1;
   const tab = (s.tab === CASH_SYM || order.includes(s.tab)) ? s.tab : order[0];
@@ -469,10 +465,13 @@ const wonFmt = (n) => n == null || !Number.isFinite(n) ? "—" : (n < 0 ? "−" 
 const cMoney = (t, v) => isKRW(t) ? wonFmt(v) : money(v);
 const cAmt = (t, v) => isKRW(t) ? wonFmt(v) : usd(v);
 const cPrice = (t, v) => v == null || !Number.isFinite(v) ? "—" : isKRW(t) ? Math.round(v).toLocaleString("ko-KR") : fmt(v);
-// 현금은 종목별 몫(t.cash)으로만 관리하고, 달러 현금은 SGOV에 넣어 둔 것으로 본다.
-const physCash = () => state.order.reduce((a, s) => a + (isKRW(state.tickers[s]) ? 0 : (state.tickers[s].cash || 0)), 0);
-const cashValue = physCash;
-const sgovShares = () => { const px = state.cash.lastClose; return px ? Math.round(physCash() / px) : null; };
+// t.cash = 그 종목 몫의 달러 현금(아직 SGOV로 안 옮긴 돈), state.cash = 실제 SGOV 보유
+const freeCash = () => state.order.reduce((a, s) => a + (isKRW(state.tickers[s]) ? 0 : (state.tickers[s].cash || 0)), 0);
+const krwCashUSD = () => state.order.reduce((a, x) => a + (isKRW(state.tickers[x]) ? toUSD(state.tickers[x], state.tickers[x].cash || 0) : 0), 0);
+const sgovValue = () => (state.cash.shares || 0) * (state.cash.lastClose || 0);
+const physCash = () => freeCash() + sgovValue();
+const cashValue = sgovValue;
+const buyableSgov = () => { const px = state.cash.lastClose; return px ? Math.floor(freeCash() / px) : 0; };
 const tickerTotal = (t) => (t.shares || 0) * (t.lastClose || 0) + (t.cash || 0);
 const qtyStep = (t) => isCrypto(t) ? 4 : 0;                       // 코인은 소수점 주문
 const roundQty = (t, q) => isCrypto(t) ? Math.floor(q * 1e4) / 1e4 : Math.floor(q);
@@ -564,12 +563,12 @@ function doSell(t, qty, price) {
   t.realized[y] = r2((t.realized[y] || 0) + (price - (t.avgCost || 0)) * qty);
   t.shares -= qty; t.cash = r2((t.cash || 0) + qty * price);
 }
-function snapshotAll() { return { tickers: JSON.parse(JSON.stringify(state.tickers)) }; }
+function snapshotAll() { return { tickers: JSON.parse(JSON.stringify(state.tickers)), cash: JSON.parse(JSON.stringify(state.cash)) }; }
 let undoStack = null;
 function markUndo(label) { undoStack = { label, snap: snapshotAll() }; }
 function undoLast() {
   if (!undoStack) return;
-  state.tickers = undoStack.snap.tickers;
+  state.tickers = undoStack.snap.tickers; if (undoStack.snap.cash) state.cash = undoStack.snap.cash;
   const label = undoStack.label; undoStack = null;
   save(); render(); showMsg(label + "을(를) 되돌렸습니다.");
 }
@@ -590,6 +589,44 @@ function recordTrade(sym, side, qty, price, useCash, type) {
     if (useCash) t.cash = r2((t.cash || 0) - qty * price);
   }
   ledgerAdd(t, type || side, qty, price, amt);
+}
+function cashSubmit() {
+  const side = document.getElementById("cs-side").value;
+  const src = document.getElementById("cs-src").value;
+  const qty = Math.max(0, Math.round(parseFloat(document.getElementById("cs-qty").value)));
+  const price = parseFloat(document.getElementById("cs-price").value);
+  const c = state.cash, t = state.tickers[src];
+  if (!qty || !Number.isFinite(price) || price <= 0) { showMsg("수량과 단가를 넣어주세요.", "err"); return; }
+  if (!t || isKRW(t)) { showMsg("달러 현금을 쓰는 종목을 출처로 고르세요.", "err"); return; }
+  const amt = qty * price;
+  if (side === "매수" && amt > (t.cash || 0) + 0.005) { showMsg(`${src} 몫 현금이 ${usd(t.cash || 0)}뿐입니다. 먼저 매도하거나 다른 종목 몫을 쓰세요.`, "err"); return; }
+  if (side === "매도" && qty > (c.shares || 0)) { showMsg(`보유 ${c.shares || 0}주보다 많습니다.`, "err"); return; }
+  markUndo(`${CASH_SYM} ${qty}주 ${side}`);
+  if (side === "매수") {
+    const old = c.shares || 0;
+    c.avgCost = old + qty > 0 ? ((c.avgCost || 0) * old + amt) / (old + qty) : 0;
+    c.shares = old + qty; t.cash = r2((t.cash || 0) - amt);
+  } else {
+    const y = todayLocal().slice(0, 4);
+    c.realized = c.realized || {}; c.realized[y] = r2((c.realized[y] || 0) + (price - (c.avgCost || 0)) * qty);
+    c.shares -= qty; t.cash = r2((t.cash || 0) + amt);
+  }
+  c.ledger = [{ date: todayLocal(), type: side, qty, price, amount: r2(amt), shares: c.shares, src }].concat(c.ledger || []).slice(0, 200);
+  setTarget(t, t.stock, t.lastClose);
+  save(); render();
+  showMsg(`${CASH_SYM} ${qty}주 ${side}, ${src} 몫 현금 ${side === "매수" ? "−" : "+"}${usd(amt)} 반영했습니다.`);
+}
+function cashIncome() {
+  const dst = document.getElementById("cs-dst").value;
+  const amt = parseFloat(document.getElementById("cs-inc").value);
+  const t = state.tickers[dst];
+  if (!Number.isFinite(amt) || amt === 0 || !t) { showMsg("금액을 넣어주세요.", "err"); return; }
+  markUndo(`${CASH_SYM} 분배금`);
+  t.cash = r2((t.cash || 0) + amt);
+  state.cash.ledger = [{ date: todayLocal(), type: amt > 0 ? "분배금" : "출금", qty: 0, price: 0, amount: r2(amt), shares: state.cash.shares, src: dst }].concat(state.cash.ledger || []).slice(0, 200);
+  setTarget(t, t.stock, t.lastClose);
+  save(); render();
+  showMsg(`${CASH_SYM} 분배금 ${usd(amt)}를 ${dst} 몫으로 넣었습니다.`);
 }
 // 계획 체결
 function execute(sym) {
@@ -732,7 +769,7 @@ function applyData() {
   const L = market.last;
   state.market = L ? { sym: state.settings.ndx.toUpperCase(), date: L.date, pct: L.pct, crisis: L.crisis, lastEvent: L.lastEvent, waitUntil: L.waitUntil, waitMonths: L.waitMonths, waitMode: L.waitMode, waitDays: L.waitDays, streak: L.streak, events: L.recentEvents, live: liveBar ? { pct: (liveBar.close / L.close - 1) * 100 } : null } : null;
   const cb = (data.bars[CASH_SYM] || []).filter((b) => b.date !== liveDate);
-  if (cb.length) state.cash.lastClose = cb[cb.length - 1].close;
+  if (cb.length) { state.cash.lastClose = cb[cb.length - 1].close; state.cash.prevClose = cb.length > 1 ? cb[cb.length - 2].close : null; }
   save();
   if (switched.length) showMsg(`${switched.join(", ")}의 표시 통화가 바뀌어 기준가·평단·현금을 환율로 환산했습니다. 수동 조정에서 값이 맞는지 확인하세요.`, "warn");
   if (noFx.length) throw new Error(`${noFx.join(", ")}는 환율이 있어야 원화로 표시할 수 있습니다. 새로고침을 다시 시도하세요.`);
@@ -851,14 +888,16 @@ function renderStale() {
   el.innerHTML = h > 20 ? `<div class="msg warn">시세가 ${Math.floor(h)}시간 전 것입니다. 새로고침한 뒤 매매하세요.</div>` : "";
 }
 function renderTotal() {
-  let stocks = 0, chg = 0, any = false, krwCash = 0;
-  for (const sym of state.order) { const t = state.tickers[sym]; if (isKRW(t)) krwCash += toUSD(t, t.cash || 0); if (!t.lastClose) continue; any = true; stocks += toUSD(t, (t.shares || 0) * t.lastClose); if (t.prevClose) chg += toUSD(t, (t.shares || 0) * (t.lastClose - t.prevClose)); }
+  let stocks = 0, chg = 0, any = false;
+  for (const sym of state.order) { const t = state.tickers[sym]; if (!t.lastClose) continue; any = true; stocks += toUSD(t, (t.shares || 0) * t.lastClose); if (t.prevClose) chg += toUSD(t, (t.shares || 0) * (t.lastClose - t.prevClose)); }
+  const krwCash = krwCashUSD();
+  const c = state.cash;
+  if (c.shares && c.prevClose) chg += c.shares * (c.lastClose - c.prevClose);
   const value = stocks + physCash() + krwCash;
   const el = document.getElementById("total");
   if (!any || value <= 0) { el.innerHTML = ""; return; }
   const k = krw(value);
-  const sg = state.settings.useCashEtf ? sgovShares() : null;
-  const cashLine = `주식 ${usd(stocks)} · 현금 ${usd(physCash() + krwCash)}${sg ? ` (${CASH_SYM} ${sg.toLocaleString("en-US")}주)` : ""}${krwCash >= 1 ? ` · 원화 ${usd(krwCash)}` : ""}`;
+  const cashLine = `주식 ${usd(stocks)} · 현금 ${usd(physCash() + krwCash)} (${CASH_SYM} ${(c.shares || 0).toLocaleString("en-US")}주 ${usd(sgovValue())}${Math.abs(freeCash()) >= 1 ? `, 예수금 ${usd(freeCash())}` : ""}${krwCash >= 1 ? `, 원화 ${usd(krwCash)}` : ""})`;
   el.innerHTML = `<section class="card total"><h2>총자산</h2><div class="big">${usd(value)}${k ? `<span class="krw">${k}</span>` : ""}</div><div class="chg" style="color:${chg > 0 ? "var(--up)" : chg < 0 ? "var(--down)" : "var(--dim)"}">전일 대비 ${chg >= 0 ? "+" : ""}${money(chg)}${state.fx ? ` · 환율 ${Math.round(state.fx.rate).toLocaleString("ko-KR")}원` : ""}</div><div class="dim">${cashLine}</div></section>`;
 }
 function donut(segs) {
@@ -881,19 +920,26 @@ function renderAlloc() {
   if (isAlloc) {
     segs = rows.map((r, i) => ({ v: r.total, c: COLORS[i % COLORS.length] }));
     legend = rows.map((r, i) => `<div class="lrow"><span class="sw" style="background:${COLORS[i % COLORS.length]}"></span><span class="nm">${esc(r.sym)}</span><span class="dim">${usd(r.total)}</span><span class="pc">${r.pct.toFixed(0)}%</span><span class="df ${r.diff > 0.5 ? "over" : r.diff < -0.5 ? "under" : ""}">${r.diff >= 0 ? "+" : "−"}${Math.abs(r.diff).toFixed(0)}%p</span></div>`).join("")
-      + (() => { const all = physCash() + state.order.reduce((a, x) => a + (isKRW(state.tickers[x]) ? toUSD(state.tickers[x], state.tickers[x].cash || 0) : 0), 0); return Math.abs(all) < 1 ? "" : `<div class="lrow dim" style="border-top:1px solid var(--hair);margin-top:4px;padding-top:6px"><span class="sw" style="background:#A7B1C2"></span><span class="nm">현금</span><span class="dim">${usd(all)}</span><span class="pc">${sum ? (all / sum * 100).toFixed(0) : 0}%</span><span class="df">위 몫에 포함</span></div>`; })();
+      + (() => {
+        const inBook = freeCash() + krwCashUSD(), sg = sgovValue();
+        let out = "";
+        if (Math.abs(inBook) >= 1) out += `<div class="lrow dim" style="border-top:1px solid var(--hair);margin-top:4px;padding-top:6px"><span class="sw" style="background:#D5DBE4"></span><span class="nm">예수금</span><span class="dim">${usd(inBook)}</span><span class="pc">${sum ? (inBook / sum * 100).toFixed(0) : 0}%</span><span class="df">위 몫에 포함</span></div>`;
+        if (sg >= 1) out += `<div class="lrow dim"><span class="sw" style="background:#A7B1C2"></span><span class="nm">${CASH_SYM}</span><span class="dim">${usd(sg)}</span><span class="pc"></span><span class="df">배분 제외</span></div>`;
+        return out;
+      })();
   } else {
     const useEtf = state.settings.useCashEtf;
-    const krwCash = state.order.reduce((a, x) => a + (isKRW(state.tickers[x]) ? toUSD(state.tickers[x], state.tickers[x].cash || 0) : 0), 0);
-    const cashVal = physCash();
-    const freeVal = krwCash;
+    const krwCash = krwCashUSD();
+    const cashVal = sgovValue();
+    const freeVal = freeCash() + krwCash;
     const cashName = useEtf ? CASH_SYM : "현금";
-    segs = rows.map((r, i) => ({ v: r.stock, c: COLORS[i % COLORS.length] })).concat([{ v: cashVal, c: "#A7B1C2" }, { v: Math.max(0, freeVal), c: "#D5DBE4" }]);
+    segs = rows.map((r, i) => ({ v: r.stock, c: COLORS[i % COLORS.length] })).concat([{ v: Math.max(0, cashVal), c: "#A7B1C2" }, { v: Math.max(0, freeVal), c: "#D5DBE4" }]);
     const tot = rows.reduce((a, r) => a + r.stock, 0) + physCash() + krwCash;
     const pc = (v) => tot ? (v / tot * 100).toFixed(0) : 0;
     legend = rows.map((r, i) => `<div class="lrow"><span class="sw" style="background:${COLORS[i % COLORS.length]}"></span><span class="nm">${esc(r.sym)}</span><span class="dim">${usd(r.stock)}</span><span class="pc">${pc(r.stock)}%</span></div>`).join("")
       + `<div class="lrow"><span class="sw" style="background:#A7B1C2"></span><span class="nm">${cashName}</span><span class="dim">${usd(cashVal)}</span><span class="pc">${pc(cashVal)}%</span></div>`
-      + (freeVal >= 1 ? `<div class="lrow"><span class="sw" style="background:#D5DBE4"></span><span class="nm">원화</span><span class="dim">${usd(freeVal)}</span><span class="pc">${pc(freeVal)}%</span></div>` : "");
+      + (Math.abs(freeVal) >= 1 ? `<div class="lrow"><span class="sw" style="background:#D5DBE4"></span><span class="nm">예수금</span><span class="dim">${usd(freeVal)}</span><span class="pc">${pc(freeVal)}%</span></div>` : "")
+      + `<div class="lrow dim" style="border-top:1px solid var(--hair);margin-top:4px;padding-top:6px"><span class="nm" style="width:auto">현금 비중</span><span class="pc">${pc(cashVal + freeVal)}%</span></div>`;
   }
   // 배분 조정 지시
   const todo = [];
@@ -927,9 +973,9 @@ function renderAlloc() {
     else todo.push(`<div class="line dim">목표 대비 최대 ${worst.toFixed(0)}%p 차이. ${thr}%p 넘으면 조정 지시가 나옵니다.</div>`);
     todo.push(`<div class="move"><div><label for="mv-from">보내는 종목</label><select id="mv-from">${state.order.map((x) => `<option>${esc(x)}</option>`).join("")}</select></div><div><label for="mv-to">받는 종목</label><select id="mv-to">${state.order.map((x, i) => `<option ${i === 1 ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div><div><label for="mv-amt">금액 <span id="mv-cur">${isKRW(state.tickers[state.order[0]]) ? "₩" : "$"}</span></label><input id="mv-amt" inputmode="decimal"></div><button type="button" class="btn sec sm" id="moveCash">이동</button></div>`);
   } else {
-    const sg = state.settings.useCashEtf ? sgovShares() : null;
-    if (sg && sg > 0) todo.push(`<div class="line">달러 현금 ${usd(physCash())} → ${CASH_SYM} <b>${sg.toLocaleString("en-US")}주</b>어치입니다. 실제 보유와 다르면 ${CASH_SYM}를 사고팔아 맞춰 두세요.</div>`);
-    else if (physCash() < -1) todo.push(`<div class="line">달러 현금이 ${usd(physCash())}로 마이너스입니다. 종목 탭의 "현금 넣기"로 입금을 기록하거나 매도 기록을 확인하세요.</div>`);
+    const buy = state.settings.useCashEtf ? buyableSgov() : 0;
+    if (buy > 0) todo.push(`<div class="line">예수금 ${usd(freeCash())}가 놀고 있습니다 → <b>${CASH_SYM} ${buy.toLocaleString("en-US")}주</b> 매수 가능. ${CASH_SYM} 탭에서 기록하세요.</div>`);
+    else if (freeCash() < -1) todo.push(`<div class="line">예수금이 ${usd(freeCash())}로 마이너스입니다. ${CASH_SYM}를 팔아 채우거나 입금을 기록하세요.</div>`);
   }
   el.innerHTML = `<section class="card alloc"><div class="views"><button type="button" data-view="asset" class="${isAlloc ? "" : "on"}">자산 보기</button><button type="button" data-view="alloc" class="${isAlloc ? "on" : ""}">배분 보기</button></div>
     <div class="donutwrap">${donut(segs)}<div class="legend">${legend}</div></div>${todo.length ? `<div class="todo">${todo.join("")}</div>` : ""}</section>`;
@@ -970,19 +1016,41 @@ function renderTabs() {
   document.getElementById("tabs").innerHTML = html;
 }
 function renderCashPanel() {
-  const px = state.cash.lastClose, sg = sgovShares();
-  const rows = state.order.map((sym) => { const t = state.tickers[sym]; return `<tr><td>${esc(sym)}</td><td>${cAmt(t, t.cash || 0)}</td><td>${isKRW(t) ? usd(toUSD(t, t.cash || 0)) : ""}</td></tr>`; }).join("");
-  const krwCash = state.order.reduce((a, x) => a + (isKRW(state.tickers[x]) ? toUSD(state.tickers[x], state.tickers[x].cash || 0) : 0), 0);
+  const c = state.cash, px = c.lastClose;
+  const val = sgovValue();
+  const pnl = c.avgCost && px ? (px - c.avgCost) * (c.shares || 0) : null;
+  const y = todayLocal().slice(0, 4), real = c.realized && c.realized[y];
+  const usdSyms = state.order.filter((x) => !isKRW(state.tickers[x]));
+  const opts = usdSyms.map((x) => `<option value="${esc(x)}" ${(state.tickers[x].cash || 0) > 0 ? "" : ""}>${esc(x)} (몫 ${usd(state.tickers[x].cash || 0)})</option>`).join("");
+  const buy = buyableSgov();
+  const ledger = (c.ledger || []).slice(0, 10).map((e) => `<div><span>${md(e.date)}</span><span class="${e.type === "매수" ? "sig" : e.type === "매도" ? "sigdown" : ""}">${esc(e.type)}</span>${e.qty ? `<span>${e.qty}주 × ${fmt(e.price)}</span>` : ""}<span>${usd(e.amount)}</span><span>→ ${e.shares}주${e.src ? `, ${esc(e.src)} 몫` : ""}</span></div>`).join("");
+  const rows = state.order.map((sym) => { const t = state.tickers[sym]; return `<tr><td>${esc(sym)}</td><td>${cAmt(t, t.cash || 0)}</td></tr>`; }).join("");
   document.getElementById("panel").innerHTML = `<section class="panel">
-    <div class="head"><span class="sym">${CASH_SYM}</span><span class="desc">초단기 미국채 ETF, 달러 현금 보관용</span><span class="badge">현금</span></div>
+    <div class="head"><span class="sym">${CASH_SYM}</span><span class="desc">초단기 미국채 ETF, 현금 대용</span><span class="badge">현금</span></div>
     <div class="body">
-      <p class="rule">현금은 종목별 몫으로만 관리하고, 달러 현금 전체를 ${CASH_SYM}에 넣어둔 것으로 봅니다. 따로 수량을 기록할 필요는 없습니다.</p>
-      <div class="hold">달러 현금 <b>${usd(physCash())}</b>${px ? ` ≈ ${CASH_SYM} <b>${sg != null ? sg.toLocaleString("en-US") : "—"}주</b> (${fmt(px)})` : ""}${krwCash >= 1 ? `<br>원화 현금 ${usd(krwCash)} (국내 거래소, ${CASH_SYM}와 별개)` : ""}</div>
-      ${px && sg > 0 ? `<div class="status">증권사에서 ${CASH_SYM}를 <b>${sg.toLocaleString("en-US")}주</b> 정도 들고 있으면 맞습니다. 매도해서 현금이 늘면 그만큼 더 사두고, 매수할 때는 필요한 만큼 팔면 됩니다.</div>` : ""}
-      <details open><summary>종목별 몫</summary>
-        <table><thead><tr><th>종목</th><th>몫</th><th>달러 환산</th></tr></thead><tbody>${rows}<tr><td><b>달러 합계</b></td><td><b>${usd(physCash())}</b></td><td></td></tr></tbody></table>
-        <p class="note">몫을 옮기려면 배분 보기의 현금 이동을 쓰세요. ${CASH_SYM} 분배금이 들어오면 아무 종목 탭의 "현금 넣기"에 기록하면 됩니다.</p>
+      <p class="rule">매매 규칙은 적용하지 않습니다. 살 때는 어느 종목 몫 현금을 쓸지 고르고, 팔면 그 종목 몫으로 돌아갑니다.</p>
+      <div class="hold">보유 <b>${(c.shares || 0).toLocaleString("en-US")}주</b>${px ? ` × ${fmt(px)} = ${money(val)}` : ""}${c.avgCost ? `<br>평단 ${fmt(c.avgCost)}${pnl != null ? `, 평가손익 ${pnl >= 0 ? "+" : ""}${usd(pnl)}` : ""}` : ""}${real ? `, 올해 실현 ${real >= 0 ? "+" : ""}${usd(real)}` : ""}<br>예수금(아직 ${CASH_SYM}로 안 옮긴 달러) <b>${usd(freeCash())}</b></div>
+      ${buy > 0 ? `<div class="status">예수금으로 <b>${CASH_SYM} ${buy.toLocaleString("en-US")}주</b>를 살 수 있습니다.</div>` : ""}
+      <div class="trade" style="grid-template-columns:1fr 1fr 1fr 1fr auto">
+        <div><label for="cs-side">구분</label><select id="cs-side"><option>매수</option><option>매도</option></select></div>
+        <div><label for="cs-src">현금 출처</label><select id="cs-src">${opts}</select></div>
+        <div><label for="cs-qty">수량</label><input id="cs-qty" type="number" step="1" placeholder="${buy > 0 ? buy : ""}"></div>
+        <div><label for="cs-price">단가 $</label><input id="cs-price" inputmode="decimal" value="${px ? r2(px) : ""}"></div>
+        <button type="button" class="btn sm" id="cashSubmit">기록</button>
+      </div>
+      <details><summary>분배금 받기</summary>
+        <div class="grid3">
+          <div><label for="cs-inc">금액 $</label><input id="cs-inc" inputmode="decimal"></div>
+          <div><label for="cs-dst">넣을 종목 몫</label><select id="cs-dst">${opts}</select></div>
+          <button type="button" class="btn sec sm" id="cashIncome" style="align-self:end">반영</button>
+        </div>
+        <p class="note">${CASH_SYM} 분배금은 매달 첫 영업일이 배당락이고 며칠 뒤 현금으로 들어옵니다. 들어온 금액을 여기에 기록하세요.</p>
       </details>
+      <details><summary>종목별 몫 현금</summary>
+        <table><thead><tr><th>종목</th><th>몫</th></tr></thead><tbody>${rows}<tr><td><b>달러 합계</b></td><td><b>${usd(freeCash())}</b></td></tr></tbody></table>
+        <p class="note">몫을 옮기려면 배분 보기의 현금 이동을 쓰세요.</p>
+      </details>
+      ${ledger ? `<details><summary>거래 원장</summary><div class="log" style="border:none;margin-top:4px">${ledger}</div></details>` : ""}
     </div></section>`;
 }
 function renderTable(t, cfg) {
@@ -1144,7 +1212,7 @@ function renderRules() {
     <li><b>리밸런싱</b>: 기준가(전고점)에서 간격만큼 떨어질 때마다 매도 단위만큼 종가 기준 매도. 이미 판 구간은 다시 팔지 않고, 최저 구간에서 재매수 구간만큼 위로 종가가 올라오면 전량 매수(그 가격이 새 기준가). 종가가 기준가를 넘으면 기준가 갱신. 20% 단위가 브레이크 역할, 10% 단위는 수익만 깎았습니다.</li>
     <li><b>말뚝박기</b>: −3% 진입 시 그 구간의 주식 비율만 남기고 아래 구간마다 10% 예약 매수(장중 저가 기준). 2구간 위로 종가 회복 시 남은 현금 전부 매수, 거기서 3구간 다시 떨어지면 전량 매도 후 재진입. 2020년식 V자엔 좋지만 2000·2008·2022식 긴 하락에 취약해 기본 전략에서 뺐습니다.</li>
     <li><b>수량</b>: 비율이 바뀐 날 총자산(주식 평가 + 현금) × 목표 주식 비율 ÷ 종가로 목표 수량을 정하고, 목표와 보유의 차이를 오늘 할 일로 보여줍니다. 체결 완료를 누르기 전까지는 다음 날에도 그대로 남습니다.</li>
-    <li><b>현금과 배분</b>: 현금은 종목별 몫으로만 관리하고, 달러 현금 전체를 ${CASH_SYM}에 넣어둔 것으로 봅니다(${CASH_SYM} 수량은 환산해서 보여주기만 합니다). 몫은 장부일 뿐이라 배분 보기의 현금 이동으로 옮긴 뒤 매매하면 됩니다. 목표 배분은 종목 균등이고, 목표와 ${s.driftPct}%p 이상 벌어지면 한 달에 한 번 조정 지시를 냅니다. 백테스트에서 균등·월 1회 조정이 연복리 44% / 낙폭 −40%였습니다.</li>
+    <li><b>현금과 배분</b>: 달러 현금은 ${CASH_SYM}를 사서 보관합니다. 살 때 어느 종목 몫 현금을 쓸지 고르고 팔면 그 몫으로 돌아가므로, 돈의 출처가 항상 맞아떨어집니다. 아직 ${CASH_SYM}로 안 옮긴 돈은 예수금으로 표시됩니다. 몫은 장부일 뿐이라 배분 보기의 현금 이동으로 옮긴 뒤 매매하면 됩니다. 목표 균등 배분은 ${CASH_SYM}를 뺀 나머지 종목끼리 계산하고, 현금 비중은 자산 보기에서 확인합니다. 목표 배분은 종목 균등이고, 목표와 ${s.driftPct}%p 이상 벌어지면 한 달에 한 번 조정 지시를 냅니다. 백테스트에서 균등·월 1회 조정이 연복리 44% / 낙폭 −40%였습니다.</li>
     <li><b>통화</b>: 종목마다 표시 통화를 정합니다. 원화로 둔 종목은 달러 시세를 그날 환율로 환산해 보여주고, 가격·수량·현금·평단을 모두 원화로 입력합니다(피드가 BTC/KRW처럼 이미 원화면 그대로 씁니다). 총자산과 배분 비중은 다시 달러로 환산해 계산하며, 원화 현금은 ${CASH_SYM} 풀과 분리됩니다. 환율이 움직이면 원화 표시 금액도 같이 움직입니다.</li>
     <li>미국 장중에 열면 확정 전 봉은 반영하지 않습니다. 비트코인은 UTC 기준 전날까지의 확정 봉만 씁니다. 세금·수수료는 계산에 없습니다.</li>
   </ul>`;
@@ -1227,6 +1295,8 @@ document.addEventListener("click", (e) => {
   if (view) { state.view = view.dataset.view; save(); renderAlloc(); return; }
   if (e.target.id === "undoBtn") { undoLast(); return; }
   if (e.target.id === "moveCash") { moveCash(); return; }
+  if (e.target.id === "cashSubmit") { cashSubmit(); return; }
+  if (e.target.id === "cashIncome") { cashIncome(); return; }
   if (e.target.id === "allocDone") { markAllocDone(); return; }
   const b = e.target.closest("button[data-save],button[data-high],button[data-reset],button[data-exec],button[data-dep],button[data-trade],button[data-sim],button[data-del]");
   if (!b) return;

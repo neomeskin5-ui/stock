@@ -163,7 +163,8 @@ textarea{font-size:12px;min-height:90px;font-family:ui-monospace,Menlo,monospace
       <div><label for="ndx">나스닥 대용 심볼</label><input id="ndx" placeholder="ONEQ" autocapitalize="characters"></div>
       <div><label for="threshold">위기 기준 등락률 %</label><input id="threshold" type="number" step="0.1"></div>
       <div><label for="drift">배분 조정 기준 %p</label><input id="drift" type="number" step="1" min="1"></div>
-      <div><label for="waitMode">대기 규칙</label><select id="waitMode"><option value="book">책: 한 달+1일 (4회면 두 달)</option><option value="days">고정 일수</option></select></div>
+      <div><label for="waitMode">재진입 규칙</label><select id="waitMode"><option value="sma">이동평균선 회복</option><option value="days">고정 일수 대기</option><option value="book">책: 한 달+1일</option></select></div>
+      <div><label for="smaDays">재진입 이동평균 일수</label><input id="smaDays" type="number" step="1" min="2" max="250"></div>
       <div><label for="waitDays">고정 대기 일수</label><input id="waitDays" type="number" step="1" min="1" max="365"></div>
       <div class="chk"><input id="resetOnRepeat" type="checkbox"><label for="resetOnRepeat" style="margin:0">대기 중 추가 신호에 기한 재시작</label></div>
       <div class="chk"><input id="streakExit" type="checkbox"><label for="streakExit" style="margin:0">8거래일 연속 상승이면 조기 복귀</label></div>
@@ -221,10 +222,14 @@ const fmtPct = (n) => n == null || !Number.isFinite(n) ? "—" : (n > 0 ? "+" : 
 
 // opt: { waitMode: "book" | "days", waitDays, resetOnRepeat, streakExit }
 function buildMarket(bars, thresholdPct, opt) {
-  const o = Object.assign({ waitMode: "book", waitDays: 45, resetOnRepeat: true, streakExit: true }, opt || {});
+  const o = Object.assign({ waitMode: "book", waitDays: 45, smaDays: 40, resetOnRepeat: true, streakExit: true }, opt || {});
+  const smaN = Math.max(2, Math.round(o.smaDays || 40));
+  const smas = []; let sum = 0;
+  for (let i = 0; i < bars.length; i++) { sum += bars[i].close; if (i >= smaN) sum -= bars[i - smaN].close; smas.push(i >= smaN - 1 ? sum / smaN : null); }
   const byDate = {}, events = [];
   let streak = 0, waitUntil = null, waitMonths = 1, waiting = false;
   const endFrom = (date) => {
+    if (o.waitMode === "sma") return null;                       // 날짜가 아니라 이동평균 회복으로 끝난다
     if (o.waitMode === "days") return addDays(date, Math.max(1, Math.round(o.waitDays)));
     const recent = events.filter((e) => e >= addMonths(date, -2, 0));
     const four = recent.some((st) => recent.filter((e) => e >= st && e <= addMonths(st, 1, 0)).length >= 4);
@@ -240,10 +245,11 @@ function buildMarket(bars, thresholdPct, opt) {
       events.push(b.date);
       if (!waiting || o.resetOnRepeat) { waitUntil = endFrom(b.date); waiting = true; }
     }
-    if (waiting && waitUntil && b.date >= waitUntil) waiting = false;
+    if (o.waitMode === "sma") { if (waiting && !event && smas[i] != null && b.close >= smas[i]) waiting = false; }
+    else if (waiting && waitUntil && b.date >= waitUntil) waiting = false;
     if (waiting && o.streakExit && streak >= 8) waiting = false;
     const lastEvent = events.length ? events[events.length - 1] : null;
-    byDate[b.date] = { date: b.date, close: b.close, pct, event, streak, lastEvent, waitUntil, waitMonths, waitMode: o.waitMode, waitDays: o.waitDays, streakExit: o.streakExit, crisis: waiting, recentEvents: events.filter((e) => e >= addMonths(b.date, -2, 0)) };
+    byDate[b.date] = { date: b.date, close: b.close, pct, event, streak, lastEvent, waitUntil, waitMonths, waitMode: o.waitMode, waitDays: o.waitDays, smaDays: smaN, sma: smas[i] != null ? r2(smas[i]) : null, streakExit: o.streakExit, crisis: waiting, recentEvents: events.filter((e) => e >= addMonths(b.date, -2, 0)) };
   }
   return { byDate, last: bars.length ? byDate[bars[bars.length - 1].date] : null };
 }
@@ -264,8 +270,8 @@ function stepTicker(t, cfg, day) {
   const cur = t.stock == null ? 100 : t.stock;
   let signal = "", target = cur;
   const notes = [];
-  const waitOver = mk.waitUntil ? day.date >= mk.waitUntil : false;
-  const exitReason = !mk.event && (waitOver ? "대기 기간 종료" : (mk.streakExit !== false && (mk.streak || 0) >= 8) ? "8거래일 연속 상승" : null);
+  const waitOver = mk.waitMode === "sma" ? (mk.sma != null && mk.close != null && mk.close >= mk.sma) : (mk.waitUntil ? day.date >= mk.waitUntil : false);
+  const exitReason = !mk.event && (waitOver ? (mk.waitMode === "sma" ? `${mk.smaDays || 40}일선 회복` : "대기 기간 종료") : (mk.streakExit !== false && (mk.streak || 0) >= 8) ? "8거래일 연속 상승" : null);
   const hasMA = !!cfg.ma200 && Number.isFinite(day.ma);
   const aboveMA = !hasMA || day.close > day.ma;
   n.ma = Number.isFinite(day.ma) ? r2(day.ma) : null;
@@ -329,7 +335,9 @@ function stepTicker(t, cfg, day) {
 
 // ---------- 전략 프리셋 ----------
 const PRESETS = {
-  crash: { name: "−3% 대기만", cfg: { crisis: true, stake: false, ma200: false, rebal: false } },
+  crashsma: { name: "급락 매도 + 이동평균선 재진입", cfg: { crisis: true, stake: false, ma200: false, rebal: false }, global: { waitMode: "sma", smaDays: 40, threshold: -3.75, resetOnRepeat: false, streakExit: false } },
+  crashsmama: { name: "급락 + 이동평균 재진입 + 200일선", cfg: { crisis: true, stake: false, ma200: true, rebal: false }, global: { waitMode: "sma", smaDays: 40, threshold: -3.75, resetOnRepeat: false, streakExit: false } },
+  crash: { name: "−3% 대기만", cfg: { crisis: true, stake: false, ma200: false, rebal: false }, global: { waitMode: "days", waitDays: 55, threshold: -3, resetOnRepeat: false, streakExit: false } },
   crashma: { name: "−3% 대기 + 200일선", cfg: { crisis: true, stake: false, ma200: true, rebal: false } },
   ma: { name: "200일선", cfg: { crisis: false, stake: false, ma200: true, rebal: false } },
   rebal10: { name: "리밸런싱 7.5% / 10% / 2구간", cfg: { crisis: false, stake: false, ma200: false, rebal: true, stepRebal: 7.5, unit: 10, rebuy: 2 } },
@@ -337,7 +345,7 @@ const PRESETS = {
   book: { name: "책 매뉴얼 전체 (리밸 5/10/2 + 말뚝박기)", cfg: { crisis: true, stake: true, ma200: false, rebal: true, stepRebal: 5, unit: 10, rebuy: 2, stepStakeZero: 5, stepStakeHike: 7.5 } },
 };
 const RECOMMEND = {
-  TQQQ: [{ id: "crash", tag: "수익", note: "연복리 46%, 낙폭 −63% (2010~2026)" }, { id: "crashma", tag: "수비", note: "연복리 28%, 낙폭 −48%" }],
+  TQQQ: [{ id: "crashsma", tag: "추천", note: "나스닥 −3.75% 매도 → 40일선 회복 시 매수. 세후 연복리 41.9%, 낙폭 −64% (2010~2026, 수수료 0.07%·양도세 22% 반영). 보유는 40.1% / −82%" }, { id: "crashsmama", tag: "수비", note: "200일선 병행. 세후 32.0%, 낙폭 −53%. 낙폭을 줄이는 대신 매매가 두 배로 늘어 세금이 많아집니다" }],
   NVDA: [{ id: "ma", tag: "추천", note: "연복리 41%, 낙폭 −54% (1999~2026). 보유 37% / −90%보다 낫습니다" }],
   BTC: [{ id: "rebal10", tag: "수익", note: "연복리 131%, 낙폭 −62% (2011~2026)" }, { id: "rebal20", tag: "수비", note: "연복리 99%, 낮폭 −28%" }],
 };
@@ -348,13 +356,14 @@ const ADVICE = {
 };
 const DEFAULT_ORDER = ["TQQQ", "NVDA", "BTC"];
 const DEFAULT_TICKERS = {
-  TQQQ: { desc: "나스닥100 3배", feed: "TQQQ", preset: "crash" },
+  TQQQ: { desc: "나스닥100 3배", feed: "TQQQ", preset: "crashsma" },
   NVDA: { desc: "엔비디아", feed: "NVDA", preset: "ma" },
   BTC: { desc: "비트코인 현물, 원화 표시", feed: "BTC/USD", currency: "KRW", preset: "rebal10" },
 };
 const CFG_FIELDS = ["crisis", "stake", "ma200", "rebal", "stepRebal", "unit", "rebuy", "stepStakeZero", "stepStakeHike"];
-function applyPreset(t, id) {
+function applyPreset(t, id, withGlobal) {
   const p = PRESETS[id]; if (!p) return;
+  if (withGlobal && p.global && typeof state !== "undefined" && state.settings) Object.assign(state.settings, p.global);
   Object.assign(t, { crisis: false, stake: false, ma200: false, rebal: false }, p.cfg);
   if (t.stepRebal == null) t.stepRebal = 7.5; if (t.unit == null) t.unit = 10; if (t.rebuy == null) t.rebuy = 2;
   if (t.stepStakeZero == null) t.stepStakeZero = 5; if (t.stepStakeHike == null) t.stepStakeHike = 7.5;
@@ -391,7 +400,7 @@ function newTicker(sym, def) {
   applyPreset(t, (def && def.preset) || "crash");
   return t;
 }
-const defaultSettings = () => ({ apiKey: "", ndx: "ONEQ", threshold: -3, regime: "hike", useCashEtf: true, driftPct: 5, waitMode: "book", waitDays: 45, resetOnRepeat: true, streakExit: true });
+const defaultSettings = () => ({ apiKey: "", ndx: "QQQ", threshold: -3.75, regime: "hike", useCashEtf: true, driftPct: 5, waitMode: "sma", waitDays: 45, smaDays: 40, resetOnRepeat: false, streakExit: false });
 function hydrate(raw, migrating) {
   const s = raw || {};
   let order = Array.isArray(s.order) && s.order.length ? s.order.slice() : DEFAULT_ORDER.slice();
@@ -508,7 +517,8 @@ function isLive(barDate) {
 function showMsg(text, kind) { document.getElementById("msg").innerHTML = text ? `<div class="msg ${kind || ""}">${esc(text)}</div>` : ""; }
 function ruleText(t) {
   const parts = [];
-  if (t.crisis) parts.push(t.stake ? "−3% 위기 모드(말뚝박기)" : "−3% 전량매도·대기");
+  const s = state.settings;
+  if (t.crisis) parts.push(t.stake ? `${s.threshold}% 위기 모드(말뚝박기)` : `${s.threshold}% 전량매도 → ${s.waitMode === "sma" ? `${s.smaDays}일선 회복 시 재매수` : s.waitMode === "days" ? `${s.waitDays}일 대기` : "한 달+1일 대기"}`);
   if (t.ma200) parts.push("200일선 필터");
   if (t.rebal) parts.push(`리밸런싱 ${t.stepRebal}% / ${t.unit}% / ${t.rebuy}구간`);
   if (t.stake) parts.push(`말뚝 간격 ${stakeStepOf(t)}%`);
@@ -710,7 +720,7 @@ async function fetchSeries(key, symbols, optional) {
   out.__missing = missing;
   return out;
 }
-const waitOpt = () => ({ waitMode: state.settings.waitMode, waitDays: state.settings.waitDays, resetOnRepeat: state.settings.resetOnRepeat, streakExit: state.settings.streakExit });
+const waitOpt = () => ({ waitMode: state.settings.waitMode, waitDays: state.settings.waitDays, smaDays: state.settings.smaDays, resetOnRepeat: state.settings.resetOnRepeat, streakExit: state.settings.streakExit });
 function marketFromData() {
   if (!data || !data.bars) return { market: null, liveBar: null, liveDate: null };
   const ndx = data.bars[state.settings.ndx.toUpperCase()];
@@ -770,7 +780,7 @@ function applyData() {
     state.tickers[sym] = cur;
   }
   const L = market.last;
-  state.market = L ? { sym: state.settings.ndx.toUpperCase(), date: L.date, pct: L.pct, crisis: L.crisis, lastEvent: L.lastEvent, waitUntil: L.waitUntil, waitMonths: L.waitMonths, waitMode: L.waitMode, waitDays: L.waitDays, streak: L.streak, events: L.recentEvents, live: liveBar ? { pct: (liveBar.close / L.close - 1) * 100 } : null } : null;
+  state.market = L ? { sym: state.settings.ndx.toUpperCase(), date: L.date, pct: L.pct, crisis: L.crisis, lastEvent: L.lastEvent, waitUntil: L.waitUntil, waitMonths: L.waitMonths, waitMode: L.waitMode, waitDays: L.waitDays, smaDays: L.smaDays, sma: L.sma, close: L.close, streak: L.streak, events: L.recentEvents, live: liveBar ? { pct: (liveBar.close / L.close - 1) * 100 } : null } : null;
   const cb = (data.bars[CASH_SYM] || []).filter((b) => b.date !== liveDate);
   if (cb.length) { state.cash.lastClose = cb[cb.length - 1].close; state.cash.prevClose = cb.length > 1 ? cb[cb.length - 2].close : null; }
   save();
@@ -860,10 +870,11 @@ function resetTicker(sym) {
 function changeStrategy(sym, id) {
   const t = state.tickers[sym];
   if (id === "custom") { t.strategy = "custom"; save(); render(); document.getElementById("settings").open = true; showMsg("설정에서 규칙 부품을 직접 바꾸세요."); return; }
-  applyPreset(t, id);
+  applyPreset(t, id, true);
   if ((t.mode === "stake" || t.mode === "vhold") && !t.stake) t.mode = "wait";
   if (t.mode === "wait" && !t.crisis) t.mode = "rebal";
   if (t.mode === "rebal") { t.kMax = t.rebal ? Math.max(0, Math.round((100 - t.stock) / (t.unit || 10))) : 0; }
+  try { if (data && data.bars) applyData(); } catch (err) {}
   reevaluate(t);
   if (t.lastClose) setTarget(t, t.stock, t.lastClose);
   save(); render();
@@ -992,11 +1003,12 @@ function renderMarket() {
   const lines = [];
   lines.push(`나스닥(${esc(m.sym)}) ${md(m.date)} 종가 ${fmtPct(m.pct)}, 연속 상승 ${m.streak}일${state.settings.streakExit && m.streak >= 8 ? " (8일 달성, 전량 매수 신호)" : ""}`);
   if (m.live) lines.push(`미국 장중, 현재 ${fmtPct(m.live.pct)} (확정 전이라 반영하지 않음)`);
-  if (m.lastEvent) lines.push(`${state.settings.threshold}% 발생 ${m.events.map(md).join(", ")} (${m.events.length}회), 대기 종료 ${m.waitUntil} (${m.waitMode === "days" ? `${m.waitDays}일 고정${state.settings.resetOnRepeat ? "" : ", 추가 신호 무시"}` : `${m.waitMonths === 2 ? "두 달" : "한 달"}+1일`})`);
+  if (m.waitMode === "sma") lines.push(`${m.smaDays || 40}일선 ${m.sma != null ? fmt(m.sma) : "—"}, 지수 ${fmt(m.close)} (${m.sma != null ? (m.close >= m.sma ? "위" : "아래") : "—"})`);
+  if (m.lastEvent) lines.push(`${state.settings.threshold}% 발생 ${m.events.map(md).join(", ")} (${m.events.length}회)${m.waitMode === "sma" ? `, ${m.smaDays || 40}일선 회복 시 재진입` : `, 대기 종료 ${m.waitUntil} (${m.waitMode === "days" ? `${m.waitDays}일 고정${state.settings.resetOnRepeat ? "" : ", 추가 신호 무시"}` : `${m.waitMonths === 2 ? "두 달" : "한 달"}+1일`})`}`);
   else lines.push("최근 1년 나스닥 −3% 없음");
   lines.push(who);
-  const dday = m.crisis ? Math.max(0, daysBetween(m.date, m.waitUntil)) : null;
-  el.innerHTML = `<section class="card market ${m.crisis ? "crisis" : ""}"><div class="state">${m.crisis ? `위기<small>대기 종료까지 ${dday}일</small>` : "평시"}</div>${lines.map((l) => `<div class="mline">${l}</div>`).join("")}</section>`;
+  const dday = m.crisis && m.waitMode !== "sma" && m.waitUntil ? Math.max(0, daysBetween(m.date, m.waitUntil)) : null;
+  el.innerHTML = `<section class="card market ${m.crisis ? "crisis" : ""}"><div class="state">${m.crisis ? `위기<small>${m.waitMode === "sma" ? `${m.smaDays || 40}일선 회복 대기` : `대기 종료까지 ${dday}일`}</small>` : "평시"}</div>${lines.map((l) => `<div class="mline">${l}</div>`).join("")}</section>`;
 }
 const dotClass = (t) => (t.mode !== "rebal" && t.crisis) ? t.mode : (t.ma200 && t.belowMA ? "wait" : "");
 function renderSummary() {
@@ -1105,14 +1117,16 @@ function renderPanel() {
     const m = state.market || {};
     if (t.ma200) guide.push(t.ma != null ? `200일선 ${cPrice(t, t.ma)}, 지금 ${t.lastClose > t.ma ? "위" : "아래"} (${fmtPct((t.lastClose / t.ma - 1) * 100)}). 아래로 마감하면 전량 매도, 위로 올라오면 전량 매수.` : "200일선은 시세 200일치가 쌓이면 표시됩니다.");
     if (t.mode === "rebal") {
-      if (t.crisis) guide.push(`나스닥 ${state.settings.threshold}% 이하 마감이면 ${t.stake ? "말뚝박기 진입" : `전량 매도 후 ${state.settings.waitMode === "days" ? state.settings.waitDays + "일" : "한 달+1일"} 대기`}`);
+      if (t.crisis) guide.push(`나스닥 ${state.settings.threshold}% 이하 마감이면 ${t.stake ? "말뚝박기 진입" : `전량 매도 후 ${state.settings.waitMode === "sma" ? `${state.settings.smaDays}일선 회복까지` : state.settings.waitMode === "days" ? state.settings.waitDays + "일" : "한 달+1일"} 대기`}`);
       if (t.rebal) {
         if (kMax < zones) guide.push(`종가가 ${cPrice(t, level(t.ref, kMax + 1, s))} 아래로 마감하면 주식 ${unit}% 매도`);
         if (kMax >= cfg.rebuy) guide.push(`종가가 ${cPrice(t, level(t.ref, kMax - cfg.rebuy, s))} 이상이면 전량 매수`);
         else if (kMax >= 1) guide.push(`기준가 ${cPrice(t, t.ref)} 회복 시 전량 매수`);
       }
     } else if (t.mode === "wait") {
-      guide.push(`대기 종료 ${m.waitUntil || "—"}${state.settings.streakExit ? " 또는 나스닥 8거래일 연속 상승" : ""}이면 전량 매수${t.ma200 ? " (200일선 위일 때만)" : ""}`);
+      guide.push(state.settings.waitMode === "sma"
+        ? `나스닥 종가가 ${m.smaDays || 40}일선(${m.sma != null ? fmt(m.sma) : "—"}) 위로 마감하면 전량 매수${t.ma200 ? " (200일선 위일 때만)" : ""}`
+        : `대기 종료 ${m.waitUntil || "—"}${state.settings.streakExit ? " 또는 나스닥 8거래일 연속 상승" : ""}이면 전량 매수${t.ma200 ? " (200일선 위일 때만)" : ""}`);
     } else if (t.mode === "stake") {
       const total2 = totalOf(t, t.lastClose); const orders = [];
       for (let i = kMax + 1; i <= Math.min(ZONES, kMax + 4); i++) { const lv = level(t.ref, i, s); const q = roundQty(t, total2 * 0.1 / lv); orders.push(`<li>${cPrice(t, lv)}에 ${qtyText(t, q)}주 (약 ${cAmt(t, q * lv)}, 주식 ${i * UNIT}%)</li>`); }
@@ -1191,6 +1205,7 @@ function renderSettingsInputs() {
   document.getElementById("drift").value = s.driftPct;
   document.getElementById("waitMode").value = s.waitMode;
   document.getElementById("waitDays").value = s.waitDays;
+  document.getElementById("smaDays").value = s.smaDays;
   document.getElementById("resetOnRepeat").checked = !!s.resetOnRepeat;
   document.getElementById("streakExit").checked = !!s.streakExit;
   document.getElementById("useCashEtf").checked = !!s.useCashEtf;
@@ -1208,8 +1223,8 @@ function renderSettingsInputs() {
 function renderRules() {
   const s = state.settings;
   document.getElementById("rules").innerHTML = `<ul>
-    <li><b>−3% 대기</b>: 나스닥(${esc(s.ndx)}) 종가 ${s.threshold}% 이하이면 전량 매도하고 기한이 지나면 전량 매수. 백테스트에서 힘의 대부분이 이 한 줄에서 나왔습니다. 지금 설정은 <b>${s.waitMode === "days" ? `신호일부터 ${s.waitDays}일 고정` : "책 그대로 한 달+1일 (한 달 안 4회면 두 달+1일)"}</b>, 대기 중 추가 신호는 <b>${s.resetOnRepeat ? "기한 재시작" : "무시"}</b>, 8거래일 연속 상승 조기 복귀는 <b>${s.streakExit ? "사용" : "사용 안 함"}</b>입니다.</li>
-    <li><b>대기 일수 참고</b>: TQQQ 실제(2010~2026)에서는 31일 30%/−65%보다 55일 48%/−44%가 좋았지만, 40일·50일·65일이 5%p씩 출렁여 특정 숫자를 믿기 어렵습니다. 2010~2018 최적은 17일, 2019~2026 최적은 55일로 구간마다 달랐습니다. 또 "추가 신호 무시"는 2008·2020년형 급락엔 유리했지만 2000~2002년형 장기 하락에서는 재시작이 7배 나았습니다. 40~60일 사이에서 고르되 특정 값에 기대지 마세요.</li>
+    <li><b>급락 매도와 재진입</b>: 나스닥(${esc(s.ndx)}) 종가가 ${s.threshold}% 이하로 마감하면 전량 매도합니다. 재진입은 지금 <b>${s.waitMode === "sma" ? `${s.smaDays}일 이동평균선 회복` : s.waitMode === "days" ? `신호일부터 ${s.waitDays}일 고정 대기` : "책 그대로 한 달+1일"}</b>, 대기 중 추가 신호는 <b>${s.resetOnRepeat ? "기한 재시작" : "무시"}</b>, 8거래일 연속 상승 조기 복귀는 <b>${s.streakExit ? "사용" : "사용 안 함"}</b>입니다.</li>
+    <li><b>수치 근거</b> (TQQQ 실제 2010~2026, 편도 수수료 0.07%·양도세 22% 반영한 세후): 보유 40.1%/−82%, −3.75%+40일선 <b>41.9%/−64%</b>(매매 37회), 여기에 200일선 병행 32.0%/−53%(77회), −3% 대기 55일 41.0%/−50%. 주변값은 −3.5% 37.3%, −4% 39.4%, 30일선 40.1%, 50일선 39.6%로 둔덕이 넓지 않으니 특정 숫자를 믿지 마세요. 또 2000·2008을 포함한 40년 합성에서는 어떤 조합도 낙폭 −90%대였습니다. 규칙의 값어치는 수익이 아니라 폭락장 생존에 있습니다.</li>
     <li><b>200일선</b>: 최근 200거래일 종가 평균. 종가가 아래로 마감하면 전량 매도, 위로 올라오면 전량 매수. −3% 대기와 같이 쓰면 대기 종료 후에도 200일선 위일 때만 삽니다. 느린 하락장(2008, 2022)에 강하고 급락엔 늦습니다.</li>
     <li><b>리밸런싱</b>: 기준가(전고점)에서 간격만큼 떨어질 때마다 매도 단위만큼 종가 기준 매도. 이미 판 구간은 다시 팔지 않고, 최저 구간에서 재매수 구간만큼 위로 종가가 올라오면 전량 매수(그 가격이 새 기준가). 종가가 기준가를 넘으면 기준가 갱신. 20% 단위가 브레이크 역할, 10% 단위는 수익만 깎았습니다.</li>
     <li><b>말뚝박기</b>: −3% 진입 시 그 구간의 주식 비율만 남기고 아래 구간마다 10% 예약 매수(장중 저가 기준). 2구간 위로 종가 회복 시 남은 현금 전부 매수, 거기서 3구간 다시 떨어지면 전량 매도 후 재진입. 2020년식 V자엔 좋지만 2000·2008·2022식 긴 하락에 취약해 기본 전략에서 뺐습니다.</li>
@@ -1238,6 +1253,7 @@ document.getElementById("saveSettings").addEventListener("click", () => {
   const dr = parseFloat(document.getElementById("drift").value); if (Number.isFinite(dr) && dr > 0) s.driftPct = dr;
   s.waitMode = document.getElementById("waitMode").value;
   const wd = parseFloat(document.getElementById("waitDays").value); if (Number.isFinite(wd) && wd >= 1) s.waitDays = Math.round(wd);
+  const sd = parseFloat(document.getElementById("smaDays").value); if (Number.isFinite(sd) && sd >= 2) s.smaDays = Math.round(sd);
   s.resetOnRepeat = document.getElementById("resetOnRepeat").checked;
   s.streakExit = document.getElementById("streakExit").checked;
   s.useCashEtf = document.getElementById("useCashEtf").checked;
